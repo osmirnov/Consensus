@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace Consensus.FastBFT
+namespace Consensus.FastBFT.Tees
 {
     public class Tee
     {
@@ -63,10 +63,9 @@ namespace Consensus.FastBFT
             return true;
         }
 
-        public string GetHash(string str)
+        public uint GetHash(string str)
         {
-            var buffer = Encoding.UTF8.GetBytes(str);
-            return BitConverter.ToString(buffer.Where((_, i) => i % 2 == 0).ToArray());
+            return (uint)str.GetHashCode() ^ 397;
         }
 
         // non primary replica
@@ -128,7 +127,7 @@ namespace Consensus.FastBFT
             using (var memory = new MemoryStream(buffer))
             using (var reader = new BinaryReader(memory))
             {
-                var secretHash = reader.ReadString();
+                var secretHash = reader.ReadUInt32();
                 var counter = reader.ReadUInt32();
                 var viewNumber = reader.ReadUInt32();
 
@@ -142,7 +141,8 @@ namespace Consensus.FastBFT
         // by replica
         public void ResetCounter(IDictionary<string, string> lAndSignedLHashCounterViewNumbers)
         {
-            const int f = 2;
+            // Number of faulty replicas
+            const int f = 2 + 1;
 
             var atLeastFPlus1ConsistentL = lAndSignedLHashCounterViewNumbers
                 .Select(lAndSignedLHashCounterViewNumber =>

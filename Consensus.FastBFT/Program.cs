@@ -4,38 +4,15 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Consensus.FastBFT.Infrastructure;
+using Consensus.FastBFT.Messages;
+using Consensus.FastBFT.Replicas;
+using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT
 {
     class Program
     {
-        class Replica
-        {
-            public int id;
-            public Tee tee;
-        }
-
-        class PrimaryReplica
-        {
-            public int id;
-            public PrimaryTee tee;
-        }
-
-        class Block
-        {
-            public string id;
-            public int h;
-            public int k;
-            public int i;
-            public List<int> txs = new List<int>();
-            public int sig;
-
-            public Block(int h)
-            {
-                this.h = h;
-            }
-        }
-
         class Interval
         {
             public DateTime from = DateTime.Now;
@@ -44,14 +21,12 @@ namespace Consensus.FastBFT
 
         const int clientsCount = 12;
         const int replicasCount = 6;
-        const int minTransactionsCountInBlock = 10;
         const int intervalBetweenTransactions = 2; // seconds
-        private const int minNetworkLatency = 10;
-        private const int maxNetworkLatency = 100;
+
         static int[] clientIds = Enumerable.Range(0, clientsCount).ToArray();
         static int[] replicaIds = Enumerable.Range(0, replicasCount).ToArray();
+        static PrimaryReplica primaryReplica;
 
-        static ConcurrentQueue<int> transactionPool = new ConcurrentQueue<int>();
         static ConcurrentDictionary<string, Interval> consensusIntervals = new ConcurrentDictionary<string, Interval>();
         static Random rnd = new Random(Environment.TickCount);
 
@@ -67,7 +42,7 @@ namespace Consensus.FastBFT
                 RunReplicas(token);
 
                 Console.ReadKey();
-                // cancellationTokenSource.Cancel();
+                cancellationTokenSource.Cancel();
             }
 
             var to = DateTime.Now;
@@ -100,11 +75,6 @@ namespace Consensus.FastBFT
             Console.ReadKey();
         }
 
-        private static void EmulateNetworkLatency()
-        {
-            Thread.Sleep(rnd.Next(minNetworkLatency, maxNetworkLatency));
-        }
-
         private static void RunClients(CancellationToken token)
         {
             for (var i = 0; i < clientIds.Length; i++)
@@ -123,15 +93,21 @@ namespace Consensus.FastBFT
 
         private static void GenerateTransaction()
         {
+            if (primaryReplica == null) return;
+
             var sec = DateTime.Now.Second;
             if (sec % 2 == rnd.Next(1) && sec % intervalBetweenTransactions == 0)
             {
-                var tx = rnd.Next();
-                transactionPool.Enqueue(tx);
-                Console.WriteLine($"The transaction #{tx} was generated");
+                var transaction = rnd.Next();
 
-                // transaction was generated -> propagate this to network
-                EmulateNetworkLatency();
+                Console.WriteLine($"The transaction #{transaction} was generated");
+
+                // transaction was sent to primary replica
+                Network.EmulateLatency();
+
+                primaryReplica.SendMessage(new TransactionMessage {
+                    transaction = transaction
+                });
             }
         }
 
@@ -156,54 +132,64 @@ namespace Consensus.FastBFT
 
             var primaryReplicaId = activeReplicaIds.First();
 
-            var secondaryReplicas = workingReplicaIds
+            var secondaryReplicas = activeReplicaIds
                 .Where(rid => rid != primaryReplicaId)
                 .Select(rid =>
                 {
                     var replica = new Replica();
                     replica.id = rid;
                     replica.tee = new Tee();
-                    replica.tee.isActive = activeReplicaIds.Contains(rid);
+                    replica.tee.isActive = true;
                     return replica;
                 })
                 .ToArray();
-
-            var leftTree = DiscoverReplicaTopology(null, secondaryReplicas.Take(secondaryReplicas.Count() / 2));
-            var rightTree = DiscoverReplicaTopology(null, secondaryReplicas.Skip(secondaryReplicas.Count() / 2));
-
-            var primaryReplica = new PrimaryReplica();
-            primaryReplica.id = primaryReplicaId;
-            var tree = new TreeNode { leftNode = leftTree, rightNode = rightTree, replica = primaryReplicaId };
-            primaryReplica.tee = new PrimaryTee(tree);
 
             for (var i = 0; i < secondaryReplicas.Length; i++)
             {
                 var secondaryReplica = secondaryReplicas[i];
 
-                Task.Factory.StartNew(() =>
-                {
-                    while (token.IsCancellationRequested == false)
-                    {
-                        // 
-                    }
-                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
+                secondaryReplica.Run(primaryReplica, token);
             }
+
+            primaryReplica = new PrimaryReplica();
+            primaryReplica.id = primaryReplicaId;
+
+            DiscoverReplicaTopology(primaryReplica, secondaryReplicas);
+
+            primaryReplica.tee = new PrimaryTee(primaryReplica);
+
+            primaryReplica.Run(token);
         }
 
-        private static TreeNode DiscoverReplicaTopology(TreeNode parentNode, IEnumerable<Replica> secondaryReplicas)
+        private static void DiscoverReplicaTopology(Replica parentReplica, IEnumerable<Replica> secondaryReplicas)
         {
-            var parentReplica = secondaryReplicas.FirstOrDefault();
-            if (parentReplica == null) return null;
+            if (parentReplica == null) return;
 
-            var childReplicas = secondaryReplicas.Except(new[] { parentReplica });
-            var tree = new TreeNode();
+            var leftReplicas = secondaryReplicas.Skip(1);
+            var rightReplicas = leftReplicas.Skip(1);
+            var restReplicas = rightReplicas.Skip(1);
 
-            tree.parentNode = parentNode;
-            tree.leftNode = DiscoverReplicaTopology(tree, childReplicas.Take(childReplicas.Count() / 2));
-            tree.rightNode = DiscoverReplicaTopology(tree, childReplicas.Skip(childReplicas.Count() / 2));
-            tree.replica = parentReplica.id;
+            if (leftReplicas.Any())
+            {
+                var leftReplica = leftReplicas.FirstOrDefault();
 
-            return tree;
+                leftReplica.parentReplica = parentReplica;
+
+                parentReplica.childReplicas.Add(leftReplica);
+
+                DiscoverReplicaTopology(leftReplica, restReplicas.Take(restReplicas.Count() / 2));
+            }
+
+            if (rightReplicas.Any())
+            {
+                var rightReplica = rightReplicas.FirstOrDefault();
+
+                rightReplica.parentReplica = parentReplica;
+
+                parentReplica.childReplicas.Add(rightReplica);
+
+                DiscoverReplicaTopology(rightReplica, restReplicas.Skip(restReplicas.Count() / 2));
+            }
         }
     }
 }
