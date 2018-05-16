@@ -106,7 +106,7 @@ namespace Consensus.FastBFT
                 Network.EmulateLatency();
 
                 primaryReplica.SendMessage(new TransactionMessage {
-                    transaction = transaction
+                    Transaction = transaction
                 });
             }
         }

@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Consensus.FastBFT.Infrastructure;
@@ -42,7 +41,7 @@ namespace Consensus.FastBFT.Replicas
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        var transaction = transactionMessage.transaction;
+                        var transaction = transactionMessage.Transaction;
 
                         lock (block)
                         {
@@ -136,7 +135,7 @@ namespace Consensus.FastBFT.Replicas
         {
             // signed client request
             var message = string.Join(string.Empty, block.Select(tx => tx.ToString()));
-            var signedRequestCounterViewNumber = tee.RequestCounter(tee.GetHash(message));
+            var signedRequestCounterViewNumber = tee.RequestCounter(tee.Crypto.GetHash(message));
 
             // we start preparation for request handling on active replicas
             // we assume it is done in parallel and this network delay represents all of them

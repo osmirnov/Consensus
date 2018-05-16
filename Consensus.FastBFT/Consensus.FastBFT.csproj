@@ -43,9 +43,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Infrastructure\Crypto.cs" />
     <Compile Include="Infrastructure\Network.cs" />
     <Compile Include="Messages\Message.cs" />
     <Compile Include="Messages\PrepareMessage.cs" />
+    <Compile Include="Messages\SuspectMessage.cs" />
     <Compile Include="Messages\SecretShareMessage.cs" />
     <Compile Include="Messages\TransactionMessage.cs" />
     <Compile Include="Replicas\PrimaryReplica.cs" />

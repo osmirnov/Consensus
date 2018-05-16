@@ -2,6 +2,6 @@
 {
     public class TransactionMessage : Message
     {
-        public int transaction;
+        public int Transaction { get; set; }
     }
 }
