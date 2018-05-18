@@ -1,38 +1,36 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Consensus.FastBFT.Handlers;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Replicas
 {
-    class PrimaryReplica : Replica
+    public class PrimaryReplica : Replica
     {
-        const int minTransactionsCountInBlock = 10;
-
         ConcurrentQueue<int> transactionBuffer = new ConcurrentQueue<int>();
 
         public new PrimaryTee tee;
-        private Replica[] secondaryReplicas = new Replica[0];
+        private Replica[] activeReplicas = new Replica[0];
 
         public void Run(CancellationToken cancellationToken)
         {
-            secondaryReplicas = tee.GetReplicas(this);
+            activeReplicas = tee.GetReplicas(this);
             var blockBuffer = new ConcurrentQueue<int[]>();
 
             // process transactions
             Task.Factory.StartNew(() =>
             {
-                var block = new List<int>(minTransactionsCountInBlock);
+                var block = new List<int>(TransactionHandler.MinTransactionsCountInBlock);
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
                     Message message;
-                    if (messageBus.TryDequeue(out message) == false)
+                    if (messageBus.TryPeek(out message) == false)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -41,28 +39,37 @@ namespace Consensus.FastBFT.Replicas
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        var transaction = transactionMessage.Transaction;
+                        TransactionHandler.Handle(transactionMessage, block, blockBuffer);
+                        messageBus.TryDequeue(out message);
+                    }
+                }
+            }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-                        lock (block)
-                        {
-                            block.Add(transaction);
-                        }
+            var correlationId = 0;
+            var distributedSecrets = new ConcurrentDictionary<int, bool>();
 
-                        if (block.Count >= minTransactionsCountInBlock)
-                        {
-                            var blockCopy = block.ToArray();
+            // process blocks
+            Task.Factory.StartNew(() =>
+            {
+                while (cancellationToken.IsCancellationRequested == false)
+                {
+                    var isSecretDistributed = distributedSecrets.GetOrAdd(correlationId, false);
+                    if (!isSecretDistributed)
+                    {
+                        DistributeSecret(correlationId);
+                        distributedSecrets.TryUpdate(correlationId, true, false);
+                    }
 
-                            lock (block)
-                            {
-                                block.Clear();
-                            }
-
-                            // publish block to start working on consensus
-                            blockBuffer.Enqueue(blockCopy);
-                        }
-
+                    int[] block;
+                    if (blockBuffer.TryDequeue(out block) == false)
+                    {
+                        Thread.Sleep(5000);
                         continue;
                     }
+
+                    Interlocked.Increment(ref correlationId);
+
+                    InitiateConsesusProcess(correlationId, block);
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
@@ -73,43 +80,9 @@ namespace Consensus.FastBFT.Replicas
                 {
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
-            // process blocks
-            Task.Factory.StartNew(() =>
-            {
-                var isSecretDistributed = false;
-
-                while (cancellationToken.IsCancellationRequested == false)
-                {
-                    if (!isSecretDistributed)
-                    {
-                        DistributeSecret();
-                    }
-
-                    int[] block;
-                    if (blockBuffer.TryDequeue(out block) == false) continue;
-
-                    HandleClientRequest(block);
-
-                    GetConsensusOnBlock(block);
-                    AddBlockIntoChain(block);
-
-                    isSecretDistributed = false;
-                }
-            }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        private void GetConsensusOnBlock(int[] block)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void AddBlockIntoChain(int[] block)
-        {
-            throw new NotImplementedException();
-        }
-
-        private void DistributeSecret()
+        private void DistributeSecret(int correlationId)
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
@@ -124,16 +97,17 @@ namespace Consensus.FastBFT.Replicas
             {
                 var replicaId = encryptedReplicaSecret.Key;
 
-                secondaryReplicas[replicaId].SendMessage(new PreprocessingMessage
+                activeReplicas[replicaId].SendMessage(new PreprocessingMessage
                 {
+                    CorrelationId = correlationId,
                     ReplicaSecret = encryptedReplicaSecret.Value
                 });
             }
         }
 
-        private void HandleClientRequest(int[] block)
+        private void InitiateConsesusProcess(int correlationId, int[] block)
         {
-            // signed client request
+            // signed block request
             var message = string.Join(string.Empty, block.Select(tx => tx.ToString()));
             var signedRequestCounterViewNumber = tee.RequestCounter(tee.Crypto.GetHash(message));
 
@@ -141,10 +115,11 @@ namespace Consensus.FastBFT.Replicas
             // we assume it is done in parallel and this network delay represents all of them
             Network.EmulateLatency();
 
-            foreach (var secondaryReplica in secondaryReplicas)
+            foreach (var secondaryReplica in activeReplicas)
             {
                 secondaryReplica.SendMessage(new PrepareMessage
                 {
+                    CorrelationId = correlationId,
                     RequestCounterViewNumber = signedRequestCounterViewNumber
                 });
             }

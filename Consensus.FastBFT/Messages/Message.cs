@@ -2,5 +2,6 @@
 {
     public class Message
     {
+        public int CorrelationId { get; set; }
     }
 }

@@ -6,7 +6,7 @@ using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Tees
 {
-    class PrimaryTee : Tee
+    public class PrimaryTee : Tee
     {
         static Random rnd = new Random(Environment.TickCount);
 

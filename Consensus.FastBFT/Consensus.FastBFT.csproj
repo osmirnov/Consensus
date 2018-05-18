@@ -43,6 +43,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Handlers\SecretShareHandler.cs" />
+    <Compile Include="Handlers\PrepareHandler.cs" />
+    <Compile Include="Handlers\PreprocessingHandler.cs" />
+    <Compile Include="Handlers\TransactionHandler.cs" />
     <Compile Include="Infrastructure\Crypto.cs" />
     <Compile Include="Infrastructure\Network.cs" />
     <Compile Include="Messages\Message.cs" />

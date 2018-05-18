@@ -3,12 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Consensus.FastBFT.Handlers;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Replicas
 {
-    class Replica
+    public class Replica
     {
         protected ConcurrentQueue<Message> messageBus = new ConcurrentQueue<Message>();
         PrimaryReplica primaryReplica;
@@ -25,14 +26,14 @@ namespace Consensus.FastBFT.Replicas
             // process messages
             Task.Factory.StartNew(() =>
             {
-                var replicaSecret = new byte[0];
-                var childrenSecretHashes = new Dictionary<int, uint>();
-                var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
+                var replicaSecrets = new ConcurrentDictionary<int, byte[]>();
+                var childrenSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
+                var secretShareMessageTokenSources = new ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>>();
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
                     Message message;
-                    if (messageBus.TryDequeue(out message) == false)
+                    if (messageBus.TryPeek(out message) == false)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -41,63 +42,36 @@ namespace Consensus.FastBFT.Replicas
                     var preprocessingMessage = message as PreprocessingMessage;
                     if (preprocessingMessage != null)
                     {
-                        replicaSecret = preprocessingMessage.ReplicaSecret;
-                        continue;
+                        PreprocessingHandler.Handle(preprocessingMessage, replicaSecrets);
+                        messageBus.TryDequeue(out message);
                     }
 
                     var prepareMessage = message as PrepareMessage;
                     if (prepareMessage != null)
                     {
-                        var requestCounterViewNumber = prepareMessage.RequestCounterViewNumber;
-
-                        string secretShare;
-                        uint secretHash;
-
-                        tee.VerifyCounter(
-                            requestCounterViewNumber,
-                            replicaSecret,
-                            out secretShare,
-                            out childrenSecretHashes,
-                            out secretHash);
-
-                        if (childReplicas.Any())
-                        {
-                            secretShareMessageTokenSources.Clear();
-
-                            var secretShareMessageTasks = childReplicas
-                                .Select(childReplica =>
-                                {
-                                    var cancellationTokenSource = new CancellationTokenSource();
-                                    secretShareMessageTokenSources.Add(childReplica.id, cancellationTokenSource);
-                                    return Task.Delay(1000, cancellationTokenSource.Token)
-                                        .ContinueWith(t =>
-                                        {
-                                            if (t.IsCompleted)
-                                            {
-                                                primaryReplica.SendMessage(new SuspectMessage { ReplicaId = childReplica.id });
-                                            }
-                                        });
-                                });
-                        }
-
-                        parentReplica.SendMessage(new SecretShareMessage { ReplicaId = id, SecreShare = secretShare });
-
-                        continue;
+                        PrepareHandler.Handle(
+                            prepareMessage,
+                            tee,
+                            replicaSecrets,
+                            childrenSecretHashes,
+                            primaryReplica,
+                            id,
+                            parentReplica,
+                            childReplicas.Select(r => r.id),
+                            secretShareMessageTokenSources
+                        );
+                        messageBus.TryDequeue(out message);
                     }
 
                     var secretShareMessage = message as SecretShareMessage;
                     if (secretShareMessage != null)
                     {
-                        var replicaId = secretShareMessage.ReplicaId;
-
-                        secretShareMessageTokenSources[replicaId].Cancel();
-
-                        if (tee.Crypto.GetHash(secretShareMessage.SecreShare) == childrenSecretHashes[replicaId])
-                        {
-
-                        }
-
-                        continue;
+                        SecretShareHandler.Handle(
+                            secretShareMessage,
+                            tee,
+                            childrenSecretHashes,
+                            secretShareMessageTokenSources);
+                        messageBus.TryDequeue(out message);
                     }
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
