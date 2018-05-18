@@ -27,7 +27,9 @@ namespace Consensus.FastBFT.Replicas
             Task.Factory.StartNew(() =>
             {
                 var replicaSecrets = new ConcurrentDictionary<int, byte[]>();
-                var childrenSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
+                var replicaSecretShares = new ConcurrentDictionary<int, string>();
+                var childSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
+                var verifiedChildShareSecrets = new ConcurrentDictionary<int, Dictionary<int, string>>();
                 var secretShareMessageTokenSources = new ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>>();
 
                 while (cancellationToken.IsCancellationRequested == false)
@@ -53,11 +55,12 @@ namespace Consensus.FastBFT.Replicas
                             prepareMessage,
                             tee,
                             replicaSecrets,
-                            childrenSecretHashes,
+                            childSecretHashes,
                             primaryReplica,
                             id,
                             parentReplica,
                             childReplicas.Select(r => r.id),
+                            replicaSecretShares,
                             secretShareMessageTokenSources
                         );
                         messageBus.TryDequeue(out message);
@@ -69,8 +72,12 @@ namespace Consensus.FastBFT.Replicas
                         SecretShareHandler.Handle(
                             secretShareMessage,
                             tee,
-                            childrenSecretHashes,
-                            secretShareMessageTokenSources);
+                            parentReplica,
+                            this,
+                            replicaSecretShares,
+                            childSecretHashes,
+                            secretShareMessageTokenSources,
+                            verifiedChildShareSecrets);
                         messageBus.TryDequeue(out message);
                     }
                 }

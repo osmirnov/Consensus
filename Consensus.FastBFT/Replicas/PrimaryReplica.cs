@@ -20,7 +20,7 @@ namespace Consensus.FastBFT.Replicas
         public void Run(CancellationToken cancellationToken)
         {
             activeReplicas = tee.GetReplicas(this);
-            var blockBuffer = new ConcurrentQueue<int[]>();
+            var blockExchange = new ConcurrentQueue<int[]>();
 
             // process transactions
             Task.Factory.StartNew(() =>
@@ -39,7 +39,7 @@ namespace Consensus.FastBFT.Replicas
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        TransactionHandler.Handle(transactionMessage, block, blockBuffer);
+                        TransactionHandler.Handle(transactionMessage, block, blockExchange);
                         messageBus.TryDequeue(out message);
                     }
                 }
@@ -61,7 +61,7 @@ namespace Consensus.FastBFT.Replicas
                     }
 
                     int[] block;
-                    if (blockBuffer.TryDequeue(out block) == false)
+                    if (blockExchange.TryDequeue(out block) == false)
                     {
                         Thread.Sleep(5000);
                         continue;
@@ -76,8 +76,33 @@ namespace Consensus.FastBFT.Replicas
             // handle replicas communication
             Task.Factory.StartNew(() =>
             {
+                var replicaSecretShares = new ConcurrentDictionary<int, string>();
+                var childSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
+                var verifiedChildShareSecrets = new ConcurrentDictionary<int, Dictionary<int, string>>();
+                var secretShareMessageTokenSources = new ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>>();
+
                 while (cancellationToken.IsCancellationRequested == false)
                 {
+                    Message message;
+                    if (messageBus.TryPeek(out message) == false)
+                    {
+                        Thread.Sleep(1000);
+                        continue;
+                    }
+
+                    var secretShareMessage = message as SecretShareMessage;
+                    if (secretShareMessage != null)
+                    {
+                        PrimarySecretShareHandler.Handle(
+                            secretShareMessage,
+                            tee,
+                            this,
+                            replicaSecretShares,
+                            childSecretHashes,
+                            secretShareMessageTokenSources,
+                            verifiedChildShareSecrets);
+                        messageBus.TryDequeue(out message);
+                    }
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }

@@ -8,12 +8,11 @@ using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Handlers
 {
-    public class SecretShareHandler
+    public class PrimarySecretShareHandler : Handler
     {
         public static void Handle(
             SecretShareMessage message,
             Tee tee,
-            Replica parentReplica,
             Replica replica,
             ConcurrentDictionary<int, string> allReplicaSecretShares,
             ConcurrentDictionary<int, Dictionary<int, uint>> allChildSecretHashes,
@@ -27,8 +26,7 @@ namespace Consensus.FastBFT.Handlers
             }
 
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources;
-            if (allSecretShareMessageTokenSources.TryGetValue(message.CorrelationId,
-                    out secretShareMessageTokenSources) == false)
+            if (allSecretShareMessageTokenSources.TryGetValue(message.CorrelationId, out secretShareMessageTokenSources) == false)
             {
                 return;
             }
@@ -46,12 +44,7 @@ namespace Consensus.FastBFT.Handlers
 
             if (tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
-                parentReplica.SendMessage(
-                    new SuspectMessage
-                    {
-                        CorrelationId = message.CorrelationId,
-                        ReplicaId = childReplicaId
-                    });
+                return;
             }
 
             var currentVerifiedChildSecretShares = allVerifiedChildShareSecrets.AddOrUpdate(
@@ -80,15 +73,11 @@ namespace Consensus.FastBFT.Handlers
                 .Select(x => x.SecretShare)
                 .ToList();
 
-            verifiedSecretShares.Insert(0, replicaSecretShare);
+            var secret = string.Join(string.Empty, verifiedSecretShares);
 
-            parentReplica.SendMessage(
-                new SecretShareMessage
-                {
-                    CorrelationId = message.CorrelationId,
-                    ReplicaId = replica.id,
-                    SecreShare = string.Join(string.Empty, verifiedSecretShares)
-                });
+            Log("All ready to commit");
+
+            // tee.Crypto.GetHash(())
         }
     }
 }

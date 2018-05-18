@@ -20,6 +20,7 @@ namespace Consensus.FastBFT.Handlers
             int replicaId,
             Replica parentReplica,
             IEnumerable<int> childReplicaIds,
+            ConcurrentDictionary<int, string> allReplicaSecretShares,
             ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>> allSecretShareMessageTokenSources)
         {
             byte[] replicaSecret;
@@ -50,7 +51,7 @@ namespace Consensus.FastBFT.Handlers
                         {
                             var tokenSource = new CancellationTokenSource();
 
-                            Task.Delay(1000, tokenSource.Token)
+                            Task.Delay(5000, tokenSource.Token)
                                 .ContinueWith(t =>
                                 {
                                     if (t.IsCompleted)
@@ -69,14 +70,16 @@ namespace Consensus.FastBFT.Handlers
 
                 allSecretShareMessageTokenSources.TryAdd(message.CorrelationId, secretShareMessageTokenSources);
             }
-
-            parentReplica.SendMessage(
-                new SecretShareMessage
-                {
-                    CorrelationId = message.CorrelationId,
-                    ReplicaId = replicaId,
-                    SecreShare = secretShare
-                });
+            else
+            {
+                parentReplica.SendMessage(
+                    new SecretShareMessage
+                    {
+                        CorrelationId = message.CorrelationId,
+                        ReplicaId = replicaId,
+                        SecreShare = secretShare
+                    });
+            }
         }
     }
 }
