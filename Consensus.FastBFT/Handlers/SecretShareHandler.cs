@@ -15,66 +15,42 @@ namespace Consensus.FastBFT.Handlers
             Tee tee,
             Replica parentReplica,
             Replica replica,
-            ConcurrentDictionary<int, string> allReplicaSecretShares,
-            ConcurrentDictionary<int, Dictionary<int, uint>> allChildSecretHashes,
-            ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>> allSecretShareMessageTokenSources,
-            ConcurrentDictionary<int, Dictionary<int, string>> allVerifiedChildShareSecrets)
+            string replicaSecretShare,
+            Dictionary<int, uint> childSecretHashes,
+            Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources,
+            ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
-            string replicaSecretShare;
-            if (allReplicaSecretShares.TryGetValue(message.CorrelationId, out replicaSecretShare) == false)
-            {
-                return;
-            }
-
-            Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources;
-            if (allSecretShareMessageTokenSources.TryGetValue(message.CorrelationId,
-                    out secretShareMessageTokenSources) == false)
-            {
-                return;
-            }
-
             var childReplicaId = message.ReplicaId;
             var childSecretShare = message.SecreShare;
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
-
-            Dictionary<int, uint> childSecretHashes;
-            if (allChildSecretHashes.TryGetValue(message.CorrelationId, out childSecretHashes) == false)
-            {
-                return;
-            }
 
             if (tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
                 parentReplica.SendMessage(
                     new SuspectMessage
                     {
-                        CorrelationId = message.CorrelationId,
                         ReplicaId = childReplicaId
                     });
             }
 
-            var currentVerifiedChildSecretShares = allVerifiedChildShareSecrets.AddOrUpdate(
-                message.CorrelationId,
-                _ => new Dictionary<int, string> { { childReplicaId, childSecretShare } },
-                (_, verifiedChildSecretHashes) =>
-                {
-                    verifiedChildSecretHashes.Add(childReplicaId, childSecretShare);
-                    return verifiedChildSecretHashes;
-                });
-
-            if (currentVerifiedChildSecretShares.Count != replica.childReplicas.Count)
+            if (verifiedChildShareSecrets.TryAdd(childReplicaId, childSecretShare) == false)
             {
                 return;
             }
 
-            if (currentVerifiedChildSecretShares.Keys.OrderBy(_ => _)
+            if (verifiedChildShareSecrets.Count != replica.childReplicas.Count)
+            {
+                return;
+            }
+
+            if (verifiedChildShareSecrets.Keys.OrderBy(_ => _)
                     .SequenceEqual(replica.childReplicas.Select(r => r.id).OrderBy(_ => _)) == false)
             {
                 return;
             }
 
-            var verifiedSecretShares = currentVerifiedChildSecretShares
+            var verifiedSecretShares = verifiedChildShareSecrets
                 .Select(x => new { ReplicaId = x.Key, SecretShare = x.Value })
                 .OrderBy(x => x.ReplicaId)
                 .Select(x => x.SecretShare)
@@ -85,7 +61,6 @@ namespace Consensus.FastBFT.Handlers
             parentReplica.SendMessage(
                 new SecretShareMessage
                 {
-                    CorrelationId = message.CorrelationId,
                     ReplicaId = replica.id,
                     SecreShare = string.Join(string.Empty, verifiedSecretShares)
                 });

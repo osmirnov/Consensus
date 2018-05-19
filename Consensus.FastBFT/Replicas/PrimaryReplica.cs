@@ -45,19 +45,17 @@ namespace Consensus.FastBFT.Replicas
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-            var correlationId = 0;
-            var distributedSecrets = new ConcurrentDictionary<int, bool>();
+            var isSecretDistributed = false;
 
             // process blocks
             Task.Factory.StartNew(() =>
             {
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    var isSecretDistributed = distributedSecrets.GetOrAdd(correlationId, false);
                     if (!isSecretDistributed)
                     {
-                        DistributeSecret(correlationId);
-                        distributedSecrets.TryUpdate(correlationId, true, false);
+                        DistributeSecret();
+                        isSecretDistributed = true;
                     }
 
                     int[] block;
@@ -67,19 +65,17 @@ namespace Consensus.FastBFT.Replicas
                         continue;
                     }
 
-                    Interlocked.Increment(ref correlationId);
-
-                    InitiateConsesusProcess(correlationId, block);
+                    InitiateConsesusProcess(block);
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             // handle replicas communication
             Task.Factory.StartNew(() =>
             {
-                var replicaSecretShares = new ConcurrentDictionary<int, string>();
-                var childSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
-                var verifiedChildShareSecrets = new ConcurrentDictionary<int, Dictionary<int, string>>();
-                var secretShareMessageTokenSources = new ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>>();
+                var replicaSecretShare = string.Empty;
+                var childSecretHashes = new Dictionary<int, uint>();
+                var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
+                var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
@@ -97,7 +93,7 @@ namespace Consensus.FastBFT.Replicas
                             secretShareMessage,
                             tee,
                             this,
-                            replicaSecretShares,
+                            replicaSecretShare,
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
@@ -107,7 +103,7 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        private void DistributeSecret(int correlationId)
+        private void DistributeSecret()
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
@@ -124,13 +120,12 @@ namespace Consensus.FastBFT.Replicas
 
                 activeReplicas[replicaId].SendMessage(new PreprocessingMessage
                 {
-                    CorrelationId = correlationId,
                     ReplicaSecret = encryptedReplicaSecret.Value
                 });
             }
         }
 
-        private void InitiateConsesusProcess(int correlationId, int[] block)
+        private void InitiateConsesusProcess(int[] block)
         {
             // signed block request
             var message = string.Join(string.Empty, block.Select(tx => tx.ToString()));
@@ -144,7 +139,6 @@ namespace Consensus.FastBFT.Replicas
             {
                 secondaryReplica.SendMessage(new PrepareMessage
                 {
-                    CorrelationId = correlationId,
                     RequestCounterViewNumber = signedRequestCounterViewNumber
                 });
             }

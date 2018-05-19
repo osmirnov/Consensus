@@ -14,21 +14,15 @@ namespace Consensus.FastBFT.Handlers
         public static void Handle(
             PrepareMessage message,
             Tee tee,
-            ConcurrentDictionary<int, byte[]> allReplicaSecrets,
-            ConcurrentDictionary<int, Dictionary<int, uint>> allChildrenSecretHashes,
+            byte[] replicaSecret,
+            Dictionary<int, uint> childSecretHashes,
             PrimaryReplica primaryReplica,
             int replicaId,
             Replica parentReplica,
             IEnumerable<int> childReplicaIds,
-            ConcurrentDictionary<int, string> allReplicaSecretShares,
-            ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>> allSecretShareMessageTokenSources)
+            string replicaSecretShare,
+            Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
-            byte[] replicaSecret;
-            if (allReplicaSecrets.TryGetValue(message.CorrelationId, out replicaSecret) == false)
-            {
-                return;
-            }
-
             var requestCounterViewNumber = message.RequestCounterViewNumber;
 
             string secretShare;
@@ -44,7 +38,7 @@ namespace Consensus.FastBFT.Handlers
 
             if (childReplicaIds.Any())
             {
-                var secretShareMessageTokenSources = childReplicaIds
+                secretShareMessageTokenSources = childReplicaIds
                     .ToDictionary(
                         rid => rid,
                         rid =>
@@ -59,7 +53,6 @@ namespace Consensus.FastBFT.Handlers
                                         primaryReplica.SendMessage(
                                             new SuspectMessage
                                             {
-                                                CorrelationId = message.CorrelationId,
                                                 ReplicaId = rid
                                             });
                                     }
@@ -67,15 +60,12 @@ namespace Consensus.FastBFT.Handlers
 
                             return tokenSource;
                         });
-
-                allSecretShareMessageTokenSources.TryAdd(message.CorrelationId, secretShareMessageTokenSources);
             }
             else
             {
                 parentReplica.SendMessage(
                     new SecretShareMessage
                     {
-                        CorrelationId = message.CorrelationId,
                         ReplicaId = replicaId,
                         SecreShare = secretShare
                     });

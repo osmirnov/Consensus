@@ -7,9 +7,9 @@ namespace Consensus.FastBFT.Handlers
     {
         public static void Handle(
             PreprocessingMessage message,
-            ConcurrentDictionary<int, byte[]> allReplicaSecrets)
+            out byte[] replicaSecret)
         {
-            allReplicaSecrets.TryAdd(message.CorrelationId, message.ReplicaSecret);
+            replicaSecret = message.ReplicaSecret;
         }
     }
 }

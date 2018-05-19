@@ -26,11 +26,11 @@ namespace Consensus.FastBFT.Replicas
             // process messages
             Task.Factory.StartNew(() =>
             {
-                var replicaSecrets = new ConcurrentDictionary<int, byte[]>();
-                var replicaSecretShares = new ConcurrentDictionary<int, string>();
-                var childSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
-                var verifiedChildShareSecrets = new ConcurrentDictionary<int, Dictionary<int, string>>();
-                var secretShareMessageTokenSources = new ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>>();
+                var replicaSecret = new byte[0];
+                var replicaSecretShare = string.Empty;
+                var childSecretHashes = new Dictionary<int, uint>();
+                var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
+                var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
@@ -44,7 +44,7 @@ namespace Consensus.FastBFT.Replicas
                     var preprocessingMessage = message as PreprocessingMessage;
                     if (preprocessingMessage != null)
                     {
-                        PreprocessingHandler.Handle(preprocessingMessage, replicaSecrets);
+                        PreprocessingHandler.Handle(preprocessingMessage, out replicaSecret);
                         messageBus.TryDequeue(out message);
                     }
 
@@ -54,13 +54,13 @@ namespace Consensus.FastBFT.Replicas
                         PrepareHandler.Handle(
                             prepareMessage,
                             tee,
-                            replicaSecrets,
+                            replicaSecret,
                             childSecretHashes,
                             primaryReplica,
                             id,
                             parentReplica,
                             childReplicas.Select(r => r.id),
-                            replicaSecretShares,
+                            replicaSecretShare,
                             secretShareMessageTokenSources
                         );
                         messageBus.TryDequeue(out message);
@@ -74,7 +74,7 @@ namespace Consensus.FastBFT.Replicas
                             tee,
                             parentReplica,
                             this,
-                            replicaSecretShares,
+                            replicaSecretShare,
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
