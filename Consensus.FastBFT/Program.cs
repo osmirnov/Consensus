@@ -3,9 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
-using Consensus.FastBFT.Infrastructure;
-using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
 using Consensus.FastBFT.Tees;
 
@@ -38,8 +35,8 @@ namespace Consensus.FastBFT
             {
                 var token = cancellationTokenSource.Token;
 
-                RunClients(token);
-                RunReplicas(token);
+                var primaryReplica = RunReplicas(token);
+                RunClients(primaryReplica, token);
 
                 Console.ReadKey();
                 cancellationTokenSource.Cancel();
@@ -75,43 +72,19 @@ namespace Consensus.FastBFT
             Console.ReadKey();
         }
 
-        private static void RunClients(CancellationToken token)
+        private static void RunClients(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
         {
-            for (var i = 0; i < clientIds.Length; i++)
-            {
-                var clientId = clientIds[i];
+            var clients = clientIds
+                .Select(cid => new Client(cid))
+                .ToArray();
 
-                Task.Factory.StartNew(() =>
-                {
-                    while (token.IsCancellationRequested == false)
-                    {
-                        GenerateTransaction();
-                    }
-                }, token, TaskCreationOptions.LongRunning, TaskScheduler.Current);
+            foreach (var client in clients)
+            {
+                client.Run(primaryReplica, cancellationToken);
             }
         }
 
-        private static void GenerateTransaction()
-        {
-            if (primaryReplica == null) return;
-
-            var sec = DateTime.Now.Second;
-            if (sec % 2 == rnd.Next(1) && sec % intervalBetweenTransactions == 0)
-            {
-                var transaction = rnd.Next();
-
-                Console.WriteLine($"The transaction #{transaction} was generated");
-
-                // transaction was sent to primary replica
-                Network.EmulateLatency();
-
-                primaryReplica.SendMessage(new TransactionMessage {
-                    Transaction = transaction
-                });
-            }
-        }
-
-        private static void RunReplicas(CancellationToken token)
+        private static PrimaryReplica RunReplicas(CancellationToken token)
         {
             var workingReplicaIds = replicaIds
                 .OrderBy(r => rnd.Next(replicaIds.Length))
@@ -163,6 +136,8 @@ namespace Consensus.FastBFT
             primaryReplica.Tee = new PrimaryTee(activeReplicas);
 
             primaryReplica.Run(secondaryReplicas, token);
+
+            return primaryReplica;
         }
 
         private static void DiscoverReplicaTopology(Replica parentReplica, IEnumerable<Replica> secondaryReplicas)

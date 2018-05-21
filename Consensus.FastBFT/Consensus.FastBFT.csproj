@@ -43,6 +43,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Client.cs" />
     <Compile Include="Handlers\Handler.cs" />
     <Compile Include="Handlers\CommitHandler.cs" />
     <Compile Include="Handlers\PrimarySecretShareHandler.cs" />
@@ -52,6 +53,7 @@
     <Compile Include="Handlers\TransactionHandler.cs" />
     <Compile Include="Infrastructure\Crypto.cs" />
     <Compile Include="Infrastructure\Network.cs" />
+    <Compile Include="Messages\ReplyMessage.cs" />
     <Compile Include="Messages\Message.cs" />
     <Compile Include="Messages\CommitMessage.cs" />
     <Compile Include="Messages\PrepareMessage.cs" />
