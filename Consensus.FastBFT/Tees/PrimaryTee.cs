@@ -8,37 +8,35 @@ namespace Consensus.FastBFT.Tees
 {
     public class PrimaryTee : Tee
     {
-        static readonly Random rnd = new Random(Environment.TickCount);
-
         // primary replica -> current active replicas and their view keys
         private readonly Dictionary<int, byte> replicaViewKeys = new Dictionary<int, byte>();
-        private readonly PrimaryReplica primaryReplica;
+        private readonly IReadOnlyDictionary<int, int[]> activeReplicas;
 
-        public PrimaryTee(PrimaryReplica primaryReplica)
+        public PrimaryTee(IReadOnlyDictionary<int, int[]> activeReplicas)
         {
             isActive = true;
-            counterLatest = 0;
+            latestCounter = 0;
             viewNumber++;
-            this.primaryReplica = primaryReplica;
+            this.activeReplicas = activeReplicas;
 
-            foreach (var replica in GetReplicas(primaryReplica))
+            foreach (var activeReplicaId in activeReplicas.Keys)
             {
-                var secretViewKey = (byte)rnd.Next(byte.MaxValue);
+                var secretViewKey = (byte)(new Random(Environment.TickCount)).Next(byte.MaxValue);
                 var encryptedViewKey = Crypto.Encrypt(secretViewKey.ToString());
 
-                replicaViewKeys.Add(replica.id, secretViewKey);
+                replicaViewKeys.Add(activeReplicaId, secretViewKey);
             }
         }
 
-        public Replica[] GetReplicas(Replica parentReplica)
-        {
-            return parentReplica.childReplicas
-                .SelectMany(r => GetReplicas(r))
-                .Concat(new[] { parentReplica })
-                .Except(new[] { primaryReplica })
-                .OrderBy(r => r.id)
-                .ToArray();
-        }
+        //public Replica[] GetReplicas(Replica parentReplica)
+        //{
+        //    return parentReplica.childReplicas
+        //        .SelectMany(r => GetReplicas(r))
+        //        .Concat(new[] { parentReplica })
+        //        .Except(new[] { activeReplicas })
+        //        .OrderBy(r => r.id)
+        //        .ToArray();
+        //}
 
         // primary replica
         public IDictionary<string, IDictionary<int, byte[]>> Preprocessing(int counterValuesCount)
@@ -47,26 +45,25 @@ namespace Consensus.FastBFT.Tees
 
             for (uint i = 1; i <= counterValuesCount; i++)
             {
-                var counter = counterLatest + i;
+                var counter = latestCounter + i;
                 // generate secret
                 var secret = Guid.NewGuid().ToString();
                 var secretHash = Crypto.GetHash(secret + counter + viewNumber);
-                var replicas = GetReplicas(primaryReplica);
-                var replicasCount = replicas.Length;
-                var secretShareLength = secret.Length / replicasCount;
+                var activeReplicasCount = activeReplicas.Count;
+                var secretShareLength = secret.Length / activeReplicasCount;
                 var secretShares = Enumerable
-                    .Range(0, replicasCount)
-                    .Select(j => j != replicasCount - 1
+                    .Range(0, activeReplicasCount)
+                    .Select(j => j != activeReplicasCount - 1
                         ? secret.Substring(j * secretShareLength, secretShareLength)
                         : secret.Substring(j * secretShareLength))
                     .ToArray();
 
                 var encryptedReplicaSecrets = new Dictionary<int, byte[]>();
 
-                foreach (var replica in replicas)
+                foreach (var activeReplica in activeReplicas)
                 {
                     DistributeSecretAmongReplicas(
-                        replica,
+                        activeReplica,
                         secretShares,
                         counter,
                         secretHash,
@@ -83,30 +80,32 @@ namespace Consensus.FastBFT.Tees
 
         public string RequestCounter(uint x)
         {
-            counterLatest++;
-            return Crypto.Sign(x.ToString() + counterLatest + viewNumber);
+            latestCounter++;
+            return Crypto.Sign(x.ToString() + latestCounter + viewNumber);
         }
 
         private void DistributeSecretAmongReplicas(
-            Replica replica,
+            KeyValuePair<int, int[]> replica,
             IReadOnlyList<string> secretShares,
             uint counter,
             uint secretHash,
             IDictionary<int, byte[]> encryptedReplicaSecrets)
         {
-            var childrenSecretHashes = replica.childReplicas
+            var replicaId = replica.Key;
+            var childReplicaIds = replica.Value;
+            var childrenSecretHashes = childReplicaIds
                 .ToDictionary(
-                    r => r.id,
-                    r =>
+                    rid => rid,
+                    rid =>
                     {
-                        var childrenSecretShares = new[] { secretShares[r.id] }
-                            .Concat(r.childReplicas.OrderBy(chr => chr.id).Select(chr => secretShares[chr.id]))
+                        var childSecretShares = new[] { secretShares[rid] }
+                            .Concat(activeReplicas[rid].OrderBy(chrid => chrid).Select(chrid => secretShares[chrid]))
                             .ToArray();
 
-                        return Crypto.GetHash(string.Join(string.Empty, childrenSecretShares));
+                        return Crypto.GetHash(string.Join(string.Empty, childSecretShares));
                     });
 
-            var secretShare = secretShares[replica.id];
+            var secretShare = secretShares[replicaId];
             byte[] replicaSecret;
 
             using (var memory = new MemoryStream())
@@ -129,7 +128,7 @@ namespace Consensus.FastBFT.Tees
                 replicaSecret = memory.ToArray();
             }
 
-            encryptedReplicaSecrets.Add(replica.id, Crypto.EncryptAuth(replicaSecret, replicaViewKeys[replica.id]));
+            encryptedReplicaSecrets.Add(replicaId, Crypto.EncryptAuth(replicaSecret, replicaViewKeys[replicaId]));
         }
     }
 }

@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Handlers\Handler.cs" />
+    <Compile Include="Handlers\CommitHandler.cs" />
     <Compile Include="Handlers\PrimarySecretShareHandler.cs" />
     <Compile Include="Handlers\SecretShareHandler.cs" />
     <Compile Include="Handlers\PrepareHandler.cs" />
@@ -52,6 +53,7 @@
     <Compile Include="Infrastructure\Crypto.cs" />
     <Compile Include="Infrastructure\Network.cs" />
     <Compile Include="Messages\Message.cs" />
+    <Compile Include="Messages\CommitMessage.cs" />
     <Compile Include="Messages\PrepareMessage.cs" />
     <Compile Include="Messages\SuspectMessage.cs" />
     <Compile Include="Messages\SecretShareMessage.cs" />

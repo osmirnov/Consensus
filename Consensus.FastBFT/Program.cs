@@ -156,9 +156,13 @@ namespace Consensus.FastBFT
 
             DiscoverReplicaTopology(primaryReplica, secondaryReplicas);
 
-            primaryReplica.tee = new PrimaryTee(primaryReplica);
+            var activeReplicas = new Dictionary<int, int[]>(activeReplicaIds.Length);
 
-            primaryReplica.Run(token);
+            ConvertReplicaTopologyToGraph(primaryReplica, activeReplicas);
+
+            primaryReplica.tee = new PrimaryTee(activeReplicas);
+
+            primaryReplica.Run(secondaryReplicas, token);
         }
 
         private static void DiscoverReplicaTopology(Replica parentReplica, IEnumerable<Replica> secondaryReplicas)
@@ -189,6 +193,16 @@ namespace Consensus.FastBFT
                 parentReplica.childReplicas.Add(rightReplica);
 
                 DiscoverReplicaTopology(rightReplica, restReplicas.Skip(restReplicas.Count() / 2));
+            }
+        }
+
+        private static void ConvertReplicaTopologyToGraph(Replica replica, IDictionary<int, int[]> replicaChildren)
+        {
+            replicaChildren.Add(replica.id, replica.childReplicas.Select(chr => chr.id).OrderBy(chrid => chrid).ToArray());
+
+            foreach (var childReplica in replica.childReplicas)
+            {
+                ConvertReplicaTopologyToGraph(childReplica, replicaChildren);
             }
         }
     }

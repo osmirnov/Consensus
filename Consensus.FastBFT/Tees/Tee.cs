@@ -10,7 +10,7 @@ namespace Consensus.FastBFT.Tees
     {
         public Crypto Crypto { get; private set; }
 
-        public uint counterLatest;  // all replicas -> latest counter
+        public uint latestCounter;  // all replicas -> latest counter
         public uint viewNumber;     // all replicas -> current view number
         public byte viewKey;        // active replica -> current view key agreed with the primary
         public bool isActive;
@@ -32,14 +32,14 @@ namespace Consensus.FastBFT.Tees
             var counter = BitConverter.ToUInt32(buffer, 0);
             var viewNumber = BitConverter.ToUInt32(buffer, 4);
 
-            if (counter != counterLatest + 1) throw new Exception("Invalid counter");
+            if (counter != latestCounter + 1) throw new Exception("Invalid counter");
 
-            counterLatest = 0;
+            latestCounter = 0;
             viewNumber++;
             if (isActive) viewKey = byte.Parse(Crypto.Decrypt(encryptedViewKey));
         }
 
-        // used by passive replicas
+        // used by active replicas
         public void VerifyCounter(
             string signedXCounterViewNumber,
             byte[] encryptedReplicaSecret,
@@ -70,13 +70,13 @@ namespace Consensus.FastBFT.Tees
                 secretHash = reader.ReadUInt32();
 
                 if (counter != counter2 || viewNumber == viewNumber2) throw new Exception("Invalid counter value");
-                if (counter != counterLatest + 1) throw new Exception("Invalid counter value");
+                if (counter != latestCounter + 1) throw new Exception("Invalid counter value");
 
-                counterLatest++;
+                latestCounter++;
             }
         }
 
-        // by passive replicas
+        // used by passive replicas
         public void UpdateCounter(string secret, string signedSecretHashCounterViewNumber)
         {
             byte[] buffer;
@@ -89,10 +89,10 @@ namespace Consensus.FastBFT.Tees
                 var counter = reader.ReadUInt32();
                 var viewNumber = reader.ReadUInt32();
 
-                if (counter != counterLatest + 1) throw new Exception("Invalid counter value");
+                if (counter != latestCounter + 1) throw new Exception("Invalid counter value");
                 if (Crypto.GetHash(secret + counter + viewNumber) != secretHash) throw new Exception("Invalid secret");
 
-                counterLatest++;
+                latestCounter++;
             }
         }
 
@@ -130,7 +130,7 @@ namespace Consensus.FastBFT.Tees
 
             if (atLeastFPlus1ConsistentL != null)
             {
-                counterLatest = atLeastFPlus1ConsistentL.counter;
+                latestCounter = atLeastFPlus1ConsistentL.counter;
                 viewNumber = atLeastFPlus1ConsistentL.viewNumber;
             }
         }

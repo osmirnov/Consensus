@@ -15,17 +15,15 @@ namespace Consensus.FastBFT.Replicas
         ConcurrentQueue<int> transactionBuffer = new ConcurrentQueue<int>();
 
         public new PrimaryTee tee;
-        private Replica[] activeReplicas = new Replica[0];
 
-        public void Run(CancellationToken cancellationToken)
+        public void Run(IEnumerable<Replica> activeReplicas, CancellationToken cancellationToken)
         {
-            activeReplicas = tee.GetReplicas(this);
             var blockExchange = new ConcurrentQueue<int[]>();
 
             // process transactions
             Task.Factory.StartNew(() =>
             {
-                var block = new List<int>(TransactionHandler.MinTransactionsCountInBlock);
+                var newBlock = new List<int>(TransactionHandler.MinTransactionsCountInBlock);
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
@@ -39,13 +37,14 @@ namespace Consensus.FastBFT.Replicas
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        TransactionHandler.Handle(transactionMessage, block, blockExchange);
+                        TransactionHandler.Handle(transactionMessage, newBlock, blockExchange);
                         messageBus.TryDequeue(out message);
                     }
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             var isSecretDistributed = false;
+            var consensusBlock = new int[0];
 
             // process blocks
             Task.Factory.StartNew(() =>
@@ -54,24 +53,24 @@ namespace Consensus.FastBFT.Replicas
                 {
                     if (!isSecretDistributed)
                     {
-                        DistributeSecret();
+                        DistributeSecret(activeReplicas);
                         isSecretDistributed = true;
                     }
 
-                    int[] block;
-                    if (blockExchange.TryDequeue(out block) == false)
+                    if (blockExchange.TryDequeue(out consensusBlock) == false)
                     {
                         Thread.Sleep(5000);
                         continue;
                     }
 
-                    InitiateConsesusProcess(block);
+                    InitiateConsesusProcess(activeReplicas, consensusBlock);
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             // handle replicas communication
             Task.Factory.StartNew(() =>
             {
+                var isCommitted = false;
                 var replicaSecretShare = string.Empty;
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
@@ -91,8 +90,10 @@ namespace Consensus.FastBFT.Replicas
                     {
                         PrimarySecretShareHandler.Handle(
                             secretShareMessage,
-                            tee,
                             this,
+                            activeReplicas,
+                            consensusBlock,
+                            ref isCommitted,
                             replicaSecretShare,
                             childSecretHashes,
                             secretShareMessageTokenSources,
@@ -103,7 +104,7 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        private void DistributeSecret()
+        private void DistributeSecret(IEnumerable<Replica> activeReplicas)
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
@@ -117,19 +118,25 @@ namespace Consensus.FastBFT.Replicas
             foreach (var encryptedReplicaSecret in encryptedReplicaSecrets)
             {
                 var replicaId = encryptedReplicaSecret.Key;
+                var activeReplica = activeReplicas.SingleOrDefault(r => r.id == replicaId);
 
-                activeReplicas[replicaId].SendMessage(new PreprocessingMessage
+                if (activeReplica == null)
+                {
+                    continue;
+                }
+
+                activeReplica.SendMessage(new PreprocessingMessage
                 {
                     ReplicaSecret = encryptedReplicaSecret.Value
                 });
             }
         }
 
-        private void InitiateConsesusProcess(int[] block)
+        private void InitiateConsesusProcess(IEnumerable<Replica> activeReplicas, int[] block)
         {
             // signed block request
-            var message = string.Join(string.Empty, block.Select(tx => tx.ToString()));
-            var signedRequestCounterViewNumber = tee.RequestCounter(tee.Crypto.GetHash(message));
+            var request = string.Join(string.Empty, block);
+            var signedRequestCounterViewNumber = tee.RequestCounter(tee.Crypto.GetHash(request));
 
             // we start preparation for request handling on active replicas
             // we assume it is done in parallel and this network delay represents all of them

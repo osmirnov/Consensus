@@ -20,14 +20,15 @@ namespace Consensus.FastBFT.Handlers
             int replicaId,
             Replica parentReplica,
             IEnumerable<int> childReplicaIds,
-            string replicaSecretShare,
+            out int[] block,
+            out string secretShare,
+            out uint secretHash,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
+            block = message.Block;
             var requestCounterViewNumber = message.RequestCounterViewNumber;
 
-            string secretShare;
             Dictionary<int, uint> childrenSecretHashes;
-            uint secretHash;
 
             tee.VerifyCounter(
                 requestCounterViewNumber,

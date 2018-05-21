@@ -27,7 +27,9 @@ namespace Consensus.FastBFT.Replicas
             Task.Factory.StartNew(() =>
             {
                 var replicaSecret = new byte[0];
+                var block = new int[0];
                 var replicaSecretShare = string.Empty;
+                var secretHash = default(uint);
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
@@ -60,7 +62,9 @@ namespace Consensus.FastBFT.Replicas
                             id,
                             parentReplica,
                             childReplicas.Select(r => r.id),
-                            replicaSecretShare,
+                            out block,
+                            out replicaSecretShare,
+                            out secretHash,
                             secretShareMessageTokenSources
                         );
                         messageBus.TryDequeue(out message);
@@ -71,13 +75,23 @@ namespace Consensus.FastBFT.Replicas
                     {
                         SecretShareHandler.Handle(
                             secretShareMessage,
-                            tee,
-                            parentReplica,
                             this,
                             replicaSecretShare,
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
+                        messageBus.TryDequeue(out message);
+                    }
+
+                    var commitMessage = message as CommitMessage;
+                    if (commitMessage != null)
+                    {
+                        CommitHandler.Handle(
+                            commitMessage,
+                            this,
+                            secretHash,
+                            block,
+                            replicaSecret);
                         messageBus.TryDequeue(out message);
                     }
                 }

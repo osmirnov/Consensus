@@ -12,8 +12,6 @@ namespace Consensus.FastBFT.Handlers
     {
         public static void Handle(
             SecretShareMessage message,
-            Tee tee,
-            Replica parentReplica,
             Replica replica,
             string replicaSecretShare,
             Dictionary<int, uint> childSecretHashes,
@@ -25,9 +23,9 @@ namespace Consensus.FastBFT.Handlers
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
-            if (tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (replica.tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
-                parentReplica.SendMessage(
+                replica.parentReplica.SendMessage(
                     new SuspectMessage
                     {
                         ReplicaId = childReplicaId
@@ -58,7 +56,7 @@ namespace Consensus.FastBFT.Handlers
 
             verifiedSecretShares.Insert(0, replicaSecretShare);
 
-            parentReplica.SendMessage(
+            replica.parentReplica.SendMessage(
                 new SecretShareMessage
                 {
                     ReplicaId = replica.id,

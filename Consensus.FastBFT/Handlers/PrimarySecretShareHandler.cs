@@ -1,7 +1,9 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
 using Consensus.FastBFT.Tees;
@@ -12,9 +14,11 @@ namespace Consensus.FastBFT.Handlers
     {
         public static void Handle(
             SecretShareMessage message,
-            Tee tee,
-            Replica replica,
-            string replicaSecretShare,
+            PrimaryReplica primaryReplica,
+            IEnumerable<Replica> activeRelicas,
+            int[] block,
+            ref bool isCommitted,
+            string secret,
             Dictionary<int, uint> childSecretHashes,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources,
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
@@ -24,7 +28,7 @@ namespace Consensus.FastBFT.Handlers
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
-            if (tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (primaryReplica.tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
                 return;
             }
@@ -34,13 +38,13 @@ namespace Consensus.FastBFT.Handlers
                 return;
             }
 
-            if (verifiedChildShareSecrets.Count != replica.childReplicas.Count)
+            if (verifiedChildShareSecrets.Count != primaryReplica.childReplicas.Count)
             {
                 return;
             }
 
             if (verifiedChildShareSecrets.Keys.OrderBy(_ => _)
-                    .SequenceEqual(replica.childReplicas.Select(r => r.id).OrderBy(_ => _)) == false)
+                    .SequenceEqual(primaryReplica.childReplicas.Select(r => r.id).OrderBy(_ => _)) == false)
             {
                 return;
             }
@@ -51,11 +55,37 @@ namespace Consensus.FastBFT.Handlers
                 .Select(x => x.SecretShare)
                 .ToList();
 
-            var secret = string.Join(string.Empty, verifiedSecretShares);
+            if (secret != string.Join(string.Empty, verifiedSecretShares))
+            {
+                return;
+            }
 
-            Log("All ready to commit");
+            if (!isCommitted)
+            {
+                Log("All ready to commit");
 
-            // tee.Crypto.GetHash(())
+                var request = string.Join(string.Empty, block);
+                var commitResult = block.Sum();
+                var commitResultHash = primaryReplica.tee.Crypto.GetHash(request + commitResult);
+
+                var signedCommitResultHashCounterViewNumber = primaryReplica.tee.RequestCounter(commitResultHash);
+
+                Network.EmulateLatency();
+
+                foreach (var activeRelica in activeRelicas)
+                {
+                    activeRelica.SendMessage(new CommitMessage
+                    {
+                        Secret = secret,
+                        CommitResult = commitResult,
+                        CommitResultHashCounterViewNumber = signedCommitResultHashCounterViewNumber
+                    });
+                }
+            }
+            else
+            {
+
+            }
         }
     }
 }
