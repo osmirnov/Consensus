@@ -17,9 +17,7 @@ namespace Consensus.FastBFT.Handlers
             byte[] replicaSecret,
             Dictionary<int, uint> childSecretHashes,
             PrimaryReplica primaryReplica,
-            int replicaId,
-            Replica parentReplica,
-            IEnumerable<int> childReplicaIds,
+            Replica replica,
             out int[] block,
             out string secretShare,
             out uint secretHash,
@@ -37,37 +35,34 @@ namespace Consensus.FastBFT.Handlers
                 out childrenSecretHashes,
                 out secretHash);
 
-            if (childReplicaIds.Any())
+            if (replica.ChildReplicas.Any())
             {
-                secretShareMessageTokenSources = childReplicaIds
-                    .ToDictionary(
-                        rid => rid,
-                        rid =>
+                foreach (var childReplica in replica.ChildReplicas)
+                {
+                    var tokenSource = new CancellationTokenSource();
+
+                    Task.Delay(5000, tokenSource.Token)
+                        .ContinueWith(t =>
                         {
-                            var tokenSource = new CancellationTokenSource();
-
-                            Task.Delay(5000, tokenSource.Token)
-                                .ContinueWith(t =>
-                                {
-                                    if (t.IsCompleted)
+                            if (t.IsCompleted)
+                            {
+                                primaryReplica.SendMessage(
+                                    new SuspectMessage
                                     {
-                                        primaryReplica.SendMessage(
-                                            new SuspectMessage
-                                            {
-                                                ReplicaId = rid
-                                            });
-                                    }
-                                });
-
-                            return tokenSource;
+                                        ReplicaId = childReplica.Id
+                                    });
+                            }
                         });
+
+                    secretShareMessageTokenSources.Add(childReplica.Id, tokenSource);
+                }
             }
             else
             {
-                parentReplica.SendMessage(
+                replica.ParentReplica.SendMessage(
                     new SecretShareMessage
                     {
-                        ReplicaId = replicaId,
+                        ReplicaId = replica.Id,
                         SecreShare = secretShare
                     });
             }

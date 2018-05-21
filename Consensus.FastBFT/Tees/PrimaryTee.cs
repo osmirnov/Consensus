@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Tees
 {
@@ -28,16 +27,6 @@ namespace Consensus.FastBFT.Tees
             }
         }
 
-        //public Replica[] GetReplicas(Replica parentReplica)
-        //{
-        //    return parentReplica.childReplicas
-        //        .SelectMany(r => GetReplicas(r))
-        //        .Concat(new[] { parentReplica })
-        //        .Except(new[] { activeReplicas })
-        //        .OrderBy(r => r.id)
-        //        .ToArray();
-        //}
-
         // primary replica
         public IDictionary<string, IDictionary<int, byte[]>> Preprocessing(int counterValuesCount)
         {
@@ -62,7 +51,7 @@ namespace Consensus.FastBFT.Tees
 
                 foreach (var activeReplica in activeReplicas)
                 {
-                    DistributeSecretAmongReplicas(
+                    ShareSecretAmongReplicas(
                         activeReplica,
                         secretShares,
                         counter,
@@ -84,7 +73,7 @@ namespace Consensus.FastBFT.Tees
             return Crypto.Sign(x.ToString() + latestCounter + viewNumber);
         }
 
-        private void DistributeSecretAmongReplicas(
+        private void ShareSecretAmongReplicas(
             KeyValuePair<int, int[]> replica,
             IReadOnlyList<string> secretShares,
             uint counter,

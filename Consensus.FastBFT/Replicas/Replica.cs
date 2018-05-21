@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Consensus.FastBFT.Handlers;
@@ -11,13 +10,14 @@ namespace Consensus.FastBFT.Replicas
 {
     public class Replica
     {
-        protected ConcurrentQueue<Message> messageBus = new ConcurrentQueue<Message>();
-        PrimaryReplica primaryReplica;
+        private PrimaryReplica primaryReplica;
 
-        public int id;
-        public Tee tee;
-        public Replica parentReplica;
-        public IList<Replica> childReplicas = new List<Replica>(2);
+        protected ConcurrentQueue<Message> MessageBus = new ConcurrentQueue<Message>();
+
+        public int Id;
+        public Tee Tee;
+        public Replica ParentReplica;
+        public IList<Replica> ChildReplicas = new List<Replica>(2);
 
         public void Run(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
         {
@@ -37,7 +37,7 @@ namespace Consensus.FastBFT.Replicas
                 while (cancellationToken.IsCancellationRequested == false)
                 {
                     Message message;
-                    if (messageBus.TryPeek(out message) == false)
+                    if (MessageBus.TryPeek(out message) == false)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -47,7 +47,7 @@ namespace Consensus.FastBFT.Replicas
                     if (preprocessingMessage != null)
                     {
                         PreprocessingHandler.Handle(preprocessingMessage, out replicaSecret);
-                        messageBus.TryDequeue(out message);
+                        MessageBus.TryDequeue(out message);
                     }
 
                     var prepareMessage = message as PrepareMessage;
@@ -55,19 +55,17 @@ namespace Consensus.FastBFT.Replicas
                     {
                         PrepareHandler.Handle(
                             prepareMessage,
-                            tee,
+                            Tee,
                             replicaSecret,
                             childSecretHashes,
                             primaryReplica,
-                            id,
-                            parentReplica,
-                            childReplicas.Select(r => r.id),
+                            this,
                             out block,
                             out replicaSecretShare,
                             out secretHash,
                             secretShareMessageTokenSources
                         );
-                        messageBus.TryDequeue(out message);
+                        MessageBus.TryDequeue(out message);
                     }
 
                     var secretShareMessage = message as SecretShareMessage;
@@ -80,7 +78,7 @@ namespace Consensus.FastBFT.Replicas
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
-                        messageBus.TryDequeue(out message);
+                        MessageBus.TryDequeue(out message);
                     }
 
                     var commitMessage = message as CommitMessage;
@@ -89,10 +87,12 @@ namespace Consensus.FastBFT.Replicas
                         CommitHandler.Handle(
                             commitMessage,
                             this,
+                            primaryReplica,
                             secretHash,
                             block,
-                            replicaSecret);
-                        messageBus.TryDequeue(out message);
+                            replicaSecret,
+                            secretShareMessageTokenSources);
+                        MessageBus.TryDequeue(out message);
                     }
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
@@ -100,7 +100,7 @@ namespace Consensus.FastBFT.Replicas
 
         public void SendMessage(Message message)
         {
-            messageBus.Enqueue(message);
+            MessageBus.Enqueue(message);
         }
     }
 }

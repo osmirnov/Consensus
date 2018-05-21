@@ -23,9 +23,9 @@ namespace Consensus.FastBFT.Handlers
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
-            if (replica.tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (replica.Tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
-                replica.parentReplica.SendMessage(
+                replica.ParentReplica.SendMessage(
                     new SuspectMessage
                     {
                         ReplicaId = childReplicaId
@@ -37,13 +37,13 @@ namespace Consensus.FastBFT.Handlers
                 return;
             }
 
-            if (verifiedChildShareSecrets.Count != replica.childReplicas.Count)
+            if (verifiedChildShareSecrets.Count != replica.ChildReplicas.Count)
             {
                 return;
             }
 
             if (verifiedChildShareSecrets.Keys.OrderBy(_ => _)
-                    .SequenceEqual(replica.childReplicas.Select(r => r.id).OrderBy(_ => _)) == false)
+                    .SequenceEqual(replica.ChildReplicas.Select(r => r.Id).OrderBy(_ => _)) == false)
             {
                 return;
             }
@@ -56,10 +56,10 @@ namespace Consensus.FastBFT.Handlers
 
             verifiedSecretShares.Insert(0, replicaSecretShare);
 
-            replica.parentReplica.SendMessage(
+            replica.ParentReplica.SendMessage(
                 new SecretShareMessage
                 {
-                    ReplicaId = replica.id,
+                    ReplicaId = replica.Id,
                     SecreShare = string.Join(string.Empty, verifiedSecretShares)
                 });
         }

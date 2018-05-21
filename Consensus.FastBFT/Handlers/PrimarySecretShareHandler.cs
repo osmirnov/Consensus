@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
-using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Handlers
 {
@@ -28,7 +26,7 @@ namespace Consensus.FastBFT.Handlers
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
-            if (primaryReplica.tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (primaryReplica.Tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
                 return;
             }
@@ -38,13 +36,13 @@ namespace Consensus.FastBFT.Handlers
                 return;
             }
 
-            if (verifiedChildShareSecrets.Count != primaryReplica.childReplicas.Count)
+            if (verifiedChildShareSecrets.Count != primaryReplica.ChildReplicas.Count)
             {
                 return;
             }
 
             if (verifiedChildShareSecrets.Keys.OrderBy(_ => _)
-                    .SequenceEqual(primaryReplica.childReplicas.Select(r => r.id).OrderBy(_ => _)) == false)
+                    .SequenceEqual(primaryReplica.ChildReplicas.Select(r => r.Id).OrderBy(_ => _)) == false)
             {
                 return;
             }
@@ -66,9 +64,9 @@ namespace Consensus.FastBFT.Handlers
 
                 var request = string.Join(string.Empty, block);
                 var commitResult = block.Sum();
-                var commitResultHash = primaryReplica.tee.Crypto.GetHash(request + commitResult);
+                var commitResultHash = primaryReplica.Tee.Crypto.GetHash(request + commitResult);
 
-                var signedCommitResultHashCounterViewNumber = primaryReplica.tee.RequestCounter(commitResultHash);
+                var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
 
                 Network.EmulateLatency();
 
@@ -84,7 +82,7 @@ namespace Consensus.FastBFT.Handlers
             }
             else
             {
-
+                
             }
         }
     }
