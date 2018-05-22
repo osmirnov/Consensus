@@ -13,7 +13,6 @@ namespace Consensus.FastBFT
         private Random rnd = new Random(Environment.TickCount);
         private int id;
         private ConcurrentQueue<Message> MessageBus = new ConcurrentQueue<Message>();
-        private PrimaryReplica primaryReplica;
 
         public Client(int id)
         {
@@ -22,13 +21,14 @@ namespace Consensus.FastBFT
 
         public void Run(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
         {
-            this.primaryReplica = primaryReplica;
+            var transactionTokenSources = new ConcurrentDictionary<int, CancellationTokenSource>();
 
             // process transactions
             Task.Factory.StartNew(() =>
             {
                 while (cancellationToken.IsCancellationRequested == false)
                 {
+                    GenerateTransaction(primaryReplica, transactionTokenSources);
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
@@ -43,6 +43,9 @@ namespace Consensus.FastBFT
                         Thread.Sleep(1000);
                         continue;
                     }
+
+
+                    MessageBus.TryDequeue(out message);
                 }
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
@@ -52,14 +55,10 @@ namespace Consensus.FastBFT
             MessageBus.Enqueue(message);
         }
 
-        private void GenerateTransaction(CancellationToken cancellationToken, out CancellationTokenSource tokenSource)
+        private void GenerateTransaction(
+            PrimaryReplica primaryReplica,
+            ConcurrentDictionary<int, CancellationTokenSource> transactionTokenSources)
         {
-            if (primaryReplica == null)
-            {
-                tokenSource = null;
-                return;
-            }
-
             if (rnd.Next(100) % 33 == 1)
             {
                 var transaction = rnd.Next();
@@ -74,7 +73,7 @@ namespace Consensus.FastBFT
                     Transaction = transaction
                 });
 
-                tokenSource = new CancellationTokenSource();
+                var tokenSource = new CancellationTokenSource();
 
                 Task.Delay(15 * 1000, tokenSource.Token)
                     .ContinueWith(t =>
@@ -84,10 +83,8 @@ namespace Consensus.FastBFT
                             // timeout
                         }
                     });
-            }
-            else
-            {
-                tokenSource = null;
+
+                transactionTokenSources.TryAdd(transaction, tokenSource);
             }
         }
     }
