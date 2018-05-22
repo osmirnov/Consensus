@@ -99,8 +99,10 @@ namespace Consensus.FastBFT
                 secondaryReplica.Run(cancellationToken);
             }
 
-            primaryReplica.Tee = new PrimaryTee();
-            primaryReplica.Tee.Initialize(primaryReplica, ReplicaTopology.GetActiveReplicas(primaryReplica));
+            var primaryTee = new PrimaryTee();
+            primaryTee.Initialize(ReplicaTopology.GetActiveReplicas(primaryReplica));
+
+            primaryReplica.Tee = primaryTee;
             primaryReplica.Run(secondaryReplicas, cancellationToken);
 
             return primaryReplica;

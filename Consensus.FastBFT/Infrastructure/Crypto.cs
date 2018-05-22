@@ -31,14 +31,22 @@ namespace Consensus.FastBFT.Infrastructure
             return encryptedBuffer.Skip(2).ToArray();
         }
 
-        public static string Sign(string privateKey, string str)
+        public static byte[] Sign(string privateKey, byte[] buffer)
         {
-            return privateKey + str;
+            return Encoding.UTF8.GetBytes(privateKey)
+                .Concat(new byte[] { 0xff })
+                .Concat(buffer)
+                .ToArray();
         }
 
-        public static bool Verify(string publicKey, string signedStr, out byte[] buffer)
+        public static bool Verify(string publicKey, byte[] signedBuffer, out byte[] buffer)
         {
-            buffer = Encoding.UTF8.GetBytes(signedStr.Substring(signedStr.IndexOf(publicKey), publicKey.Length));
+            var keyLength = Encoding.UTF8.GetByteCount(publicKey);
+
+            if (signedBuffer[keyLength] != 0xff) throw new Exception("Invalid signature");
+
+            buffer = signedBuffer.Skip(keyLength).ToArray();
+
             return true;
         }
 

@@ -28,7 +28,7 @@ namespace Consensus.FastBFT.Handlers
             Dictionary<int, uint> childrenSecretHashes;
 
             tee.VerifyCounter(
-                replica.PrimaryReplica.PublicKey,
+                replica.PrimaryReplica.Tee.PublicKey,
                 requestCounterViewNumber,
                 replicaSecret,
                 out secretShare,

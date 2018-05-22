@@ -14,21 +14,10 @@ namespace Consensus.FastBFT.Replicas
         protected ConcurrentQueue<Message> MessageBus = new ConcurrentQueue<Message>();
 
         public int Id { get; set; }
-        public Tee Tee { get; set; }
+        public virtual Tee Tee { get; set; }
         public Replica PrimaryReplica { get; set; }
         public Replica ParentReplica { get; set; }
         public IList<Replica> ChildReplicas { get; set; } = new List<Replica>(2);
-
-
-        public Replica()
-        {
-            PrivateKey = Guid.NewGuid().ToString("N");
-            PublicKey = PrivateKey;
-        }
-
-        public string PublicKey { get; }
-
-        public string PrivateKey { get; }
 
         public void Run(CancellationToken cancellationToken)
         {

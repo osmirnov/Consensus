@@ -6,6 +6,6 @@
 
         public int CommitResult { get; set; }
 
-        public string CommitResultHashCounterViewNumber { get; set; }
+        public byte[] CommitResultHashCounterViewNumber { get; set; }
     }
 }

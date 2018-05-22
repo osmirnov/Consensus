@@ -13,8 +13,6 @@ namespace Consensus.FastBFT.Replicas
 {
     public class PrimaryReplica : Replica
     {
-        public new PrimaryTee Tee { get; set; }
-
         public void Run(IEnumerable<Replica> activeReplicas, CancellationToken cancellationToken)
         {
             var blockExchange = new ConcurrentQueue<int[]>();
@@ -120,7 +118,7 @@ namespace Consensus.FastBFT.Replicas
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
-            var signedSecretHashAndEncryptedReplicaSecrets = Tee.Preprocessing(1).First();
+            var signedSecretHashAndEncryptedReplicaSecrets = ((PrimaryTee)Tee).Preprocessing(1).First();
             var encryptedReplicaSecrets = signedSecretHashAndEncryptedReplicaSecrets.Value;
 
             // we distribute secret shares among active replicas
@@ -143,7 +141,7 @@ namespace Consensus.FastBFT.Replicas
         {
             // signed block request
             var request = string.Join(string.Empty, block);
-            var signedRequestCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(request));
+            var signedRequestCounterViewNumber = ((PrimaryTee)Tee).RequestCounter(Crypto.GetHash(request));
 
             // we start preparation for request handling on active replicas
             // we assume it is done in parallel and this network delay represents all of them

@@ -8,17 +8,27 @@ namespace Consensus.FastBFT.Tees
 {
     public class Tee
     {
+        protected readonly string privateKey;
+
         public uint LatestCounter { get; protected set; }  // all replicas -> latest counter
         public uint ViewNumber { get; protected set; }     // all replicas -> current view number
         public byte ViewKey { get; protected set; }        // active replica -> current view key agreed with the primary
         public bool IsActive { get; set; }
+
+        public Tee()
+        {
+            privateKey = Guid.NewGuid().ToString("N");
+            PublicKey = privateKey;
+        }
+
+        public string PublicKey { get; }
 
         // non primary replica
         // signedByPrimaryReplicaPayloadAndCounterViewNumber <- by primary replica
         public void UpdateView(
             string primaryReplicaPublicKey,
             string replicaPrivateKey,
-            string signedByPrimaryReplicaPayloadAndCounterViewNumber,
+            byte[] signedByPrimaryReplicaPayloadAndCounterViewNumber,
             string encryptedViewKey)
         {
             byte[] buffer;
@@ -37,7 +47,7 @@ namespace Consensus.FastBFT.Tees
         // used by active replicas
         public void VerifyCounter(
             string primaryReplicaPublicKey,
-            string signedByPrimaryReplicaPayloadAndCounterViewNumber,
+            byte[] signedByPrimaryReplicaPayloadAndCounterViewNumber,
             byte[] encryptedReplicaSecret,
             out string secretShare,
             out Dictionary<int, uint> childrenSecretHashes,
@@ -46,8 +56,16 @@ namespace Consensus.FastBFT.Tees
             byte[] buffer;
             if (Crypto.Verify(primaryReplicaPublicKey, signedByPrimaryReplicaPayloadAndCounterViewNumber, out buffer) == false) throw new Exception("Invalid signature");
 
-            var counter = BitConverter.ToUInt32(buffer, 4);
-            var viewNumber = BitConverter.ToUInt32(buffer, 8);
+            uint counter;
+            uint viewNumber;
+
+            using (var memory = new MemoryStream(buffer))
+            using (var reader = new BinaryReader(memory))
+            {
+                var hash = reader.ReadUInt32();
+                counter = reader.ReadUInt32();
+                viewNumber = reader.ReadUInt32();
+            }
 
             using (var memory = new MemoryStream(Crypto.DecryptAuth(ViewKey, encryptedReplicaSecret)))
             using (var reader = new BinaryReader(memory))
@@ -76,7 +94,7 @@ namespace Consensus.FastBFT.Tees
         public void UpdateCounter(
             string primaryReplicaPublicKey,
             string secret,
-            string signedByPrimaryReplicaSecretHashAndCounterViewNumber)
+            byte[] signedByPrimaryReplicaSecretHashAndCounterViewNumber)
         {
             byte[] buffer;
             if (Crypto.Verify(primaryReplicaPublicKey, signedByPrimaryReplicaSecretHashAndCounterViewNumber, out buffer) == false) throw new Exception("Invalid signature");

@@ -5,6 +5,7 @@ using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
+using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Handlers
 {
@@ -66,7 +67,7 @@ namespace Consensus.FastBFT.Handlers
                 var commitResult = block.Sum();
                 var commitResultHash = Crypto.GetHash(request + commitResult);
 
-                var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
+                var signedCommitResultHashCounterViewNumber = ((PrimaryTee)primaryReplica.Tee).RequestCounter(commitResultHash);
 
                 Network.EmulateLatency();
 

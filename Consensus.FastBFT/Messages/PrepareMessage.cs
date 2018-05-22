@@ -4,6 +4,6 @@
     {
         public int[] Block { get; set; }
 
-        public string RequestCounterViewNumber { get; set; }
+        public byte[] RequestCounterViewNumber { get; set; }
     }
 }
