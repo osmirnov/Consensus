@@ -46,7 +46,7 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             var isSecretDistributed = false;
-            var consensusBlock = new int[0];
+            var consensusBlock = default(int[]);
 
             // process blocks
             Task.Factory.StartNew(() =>
@@ -61,13 +61,19 @@ namespace Consensus.FastBFT.Replicas
                         isSecretDistributed = true;
                     }
 
-                    if (blockExchange.TryDequeue(out consensusBlock) == false)
+                    if (consensusBlock == null)
                     {
-                        Thread.Sleep(5000);
+                        if (blockExchange.TryDequeue(out consensusBlock) == false)
+                        {
+                            Thread.Sleep(1000);
+                            continue;
+                        }
+
+                        InitiateConsesusProcess(activeReplicas, consensusBlock);
                         continue;
                     }
 
-                    InitiateConsesusProcess(activeReplicas, consensusBlock);
+                    Thread.Sleep(5000);
                 }
 
                 Log("Stopped block aggregation.");

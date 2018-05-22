@@ -60,6 +60,7 @@
     <Compile Include="Messages\PrepareMessage.cs" />
     <Compile Include="Messages\SuspectMessage.cs" />
     <Compile Include="Messages\SecretShareMessage.cs" />
+    <Compile Include="Messages\SyncMessage.cs" />
     <Compile Include="Messages\TransactionMessage.cs" />
     <Compile Include="Replicas\PrimaryReplica.cs" />
     <Compile Include="Replicas\Replica.cs" />
