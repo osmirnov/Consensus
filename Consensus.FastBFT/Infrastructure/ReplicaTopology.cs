@@ -8,9 +8,9 @@ namespace Consensus.FastBFT.Infrastructure
     {
         public static void Discover(Replica parentReplica, IEnumerable<Replica> secondaryReplicas)
         {
-            if (parentReplica == null) return;
+            if (parentReplica == null || secondaryReplicas.Any() == false) return;
 
-            var leftReplicas = secondaryReplicas.Skip(1);
+            var leftReplicas = secondaryReplicas.Where(r => r.Id != parentReplica.Id);
             var rightReplicas = leftReplicas.Skip(1);
             var restReplicas = rightReplicas.Skip(1);
 
@@ -37,22 +37,25 @@ namespace Consensus.FastBFT.Infrastructure
             }
         }
 
-        public static IReadOnlyDictionary<int, int[]> ToGraph(Replica replica)
+        public static IReadOnlyCollection<Replica> GetActiveReplicas(Replica replica)
         {
-            var replicaGraph = new Dictionary<int, int[]>();
-
-            ToGraph(replica, replicaGraph);
-
-            return replicaGraph;
-        }
-
-        private static void ToGraph(Replica replica, IDictionary<int, int[]> replicaChildren)
-        {
-            replicaChildren.Add(replica.Id, replica.ChildReplicas.Select(chr => chr.Id).OrderBy(chrid => chrid).ToArray());
+            var activeReplicas = new List<Replica>();
 
             foreach (var childReplica in replica.ChildReplicas)
             {
-                ToGraph(childReplica, replicaChildren);
+                activeReplicas.Add(childReplica);
+                GetActiveReplicas(childReplica, activeReplicas);
+            }
+
+            return activeReplicas;
+        }
+
+        private static void GetActiveReplicas(Replica replica, ICollection<Replica> activeReplicas)
+        {
+            foreach (var childReplica in replica.ChildReplicas)
+            {
+                activeReplicas.Add(childReplica);
+                GetActiveReplicas(childReplica, activeReplicas);
             }
         }
     }

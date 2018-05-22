@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,9 +13,7 @@ namespace Consensus.FastBFT.Replicas
 {
     public class PrimaryReplica : Replica
     {
-        private readonly ConcurrentQueue<int> transactionBuffer = new ConcurrentQueue<int>();
-
-        public new PrimaryTee Tee;
+        public new PrimaryTee Tee { get; set; }
 
         public void Run(IEnumerable<Replica> activeReplicas, CancellationToken cancellationToken)
         {
@@ -23,7 +22,10 @@ namespace Consensus.FastBFT.Replicas
             // process transactions
             Task.Factory.StartNew(() =>
             {
-                var newBlock = new List<int>(TransactionHandler.MinTransactionsCountInBlock);
+                var newBlock = new List<int>();
+                var lastBlockCreatedAt = DateTime.Now;
+
+                Log("Running transaction listening...");
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
@@ -37,10 +39,12 @@ namespace Consensus.FastBFT.Replicas
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        TransactionHandler.Handle(transactionMessage, newBlock, blockExchange);
+                        TransactionHandler.Handle(transactionMessage, newBlock, ref lastBlockCreatedAt, blockExchange);
                         MessageBus.TryDequeue(out message);
                     }
                 }
+
+                Log("Stopped transaction listening.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             var isSecretDistributed = false;
@@ -49,6 +53,8 @@ namespace Consensus.FastBFT.Replicas
             // process blocks
             Task.Factory.StartNew(() =>
             {
+                Log("Running block aggregation...");
+
                 while (cancellationToken.IsCancellationRequested == false)
                 {
                     if (!isSecretDistributed)
@@ -65,6 +71,8 @@ namespace Consensus.FastBFT.Replicas
 
                     InitiateConsesusProcess(activeReplicas, consensusBlock);
                 }
+
+                Log("Stopped block aggregation.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             // handle replicas communication
@@ -75,6 +83,8 @@ namespace Consensus.FastBFT.Replicas
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
+
+                Log("Running message exchange...");
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
@@ -101,6 +111,8 @@ namespace Consensus.FastBFT.Replicas
                         MessageBus.TryDequeue(out message);
                     }
                 }
+
+                Log("Stopped message exchange.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
@@ -120,12 +132,7 @@ namespace Consensus.FastBFT.Replicas
                 var replicaId = encryptedReplicaSecret.Key;
                 var activeReplica = activeReplicas.SingleOrDefault(r => r.Id == replicaId);
 
-                if (activeReplica == null)
-                {
-                    continue;
-                }
-
-                activeReplica.SendMessage(new PreprocessingMessage
+                activeReplica?.SendMessage(new PreprocessingMessage
                 {
                     ReplicaSecret = encryptedReplicaSecret.Value
                 });
@@ -136,7 +143,7 @@ namespace Consensus.FastBFT.Replicas
         {
             // signed block request
             var request = string.Join(string.Empty, block);
-            var signedRequestCounterViewNumber = Tee.RequestCounter(Tee.Crypto.GetHash(request));
+            var signedRequestCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(request));
 
             // we start preparation for request handling on active replicas
             // we assume it is done in parallel and this network delay represents all of them
@@ -146,9 +153,15 @@ namespace Consensus.FastBFT.Replicas
             {
                 secondaryReplica.SendMessage(new PrepareMessage
                 {
+                    Block = block,
                     RequestCounterViewNumber = signedRequestCounterViewNumber
                 });
             }
+        }
+
+        private void Log(string message)
+        {
+            Console.WriteLine($"Primary Replica #{Id}: {message}");
         }
     }
 }

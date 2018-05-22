@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Consensus.FastBFT.Infrastructure;
+using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Tees
 {
@@ -9,22 +11,30 @@ namespace Consensus.FastBFT.Tees
     {
         // primary replica -> current active replicas and their view keys
         private readonly Dictionary<int, byte> replicaViewKeys = new Dictionary<int, byte>();
-        private readonly IReadOnlyDictionary<int, int[]> activeReplicas;
+        private PrimaryReplica primaryReplica;
+        private IReadOnlyCollection<Replica> activeReplicas;
 
-        public PrimaryTee(IReadOnlyDictionary<int, int[]> activeReplicas)
+        public IReadOnlyDictionary<int, string> Initialize(PrimaryReplica primaryReplica, IReadOnlyCollection<Replica> activeReplicas)
         {
-            isActive = true;
-            latestCounter = 0;
-            viewNumber++;
+            IsActive = true;
+            LatestCounter = 0;
+            ViewNumber++;
+
+            this.primaryReplica = primaryReplica;
             this.activeReplicas = activeReplicas;
 
-            foreach (var activeReplicaId in activeReplicas.Keys)
+            var encryptedViewKeys = new Dictionary<int, string>();
+
+            foreach (var activeReplica in activeReplicas)
             {
                 var secretViewKey = (byte)(new Random(Environment.TickCount)).Next(byte.MaxValue);
-                var encryptedViewKey = Crypto.Encrypt(secretViewKey.ToString());
+                replicaViewKeys.Add(activeReplica.Id, secretViewKey);
 
-                replicaViewKeys.Add(activeReplicaId, secretViewKey);
+                var encryptedViewKey = Crypto.Encrypt(activeReplica.PublicKey, secretViewKey.ToString());
+                encryptedViewKeys.Add(activeReplica.Id, encryptedViewKey);
             }
+
+            return encryptedViewKeys;
         }
 
         // primary replica
@@ -34,18 +44,23 @@ namespace Consensus.FastBFT.Tees
 
             for (uint i = 1; i <= counterValuesCount; i++)
             {
-                var counter = latestCounter + i;
+                var counter = LatestCounter + i;
                 // generate secret
                 var secret = Guid.NewGuid().ToString();
-                var secretHash = Crypto.GetHash(secret + counter + viewNumber);
+                var secretHash = Crypto.GetHash(secret + counter + ViewNumber);
                 var activeReplicasCount = activeReplicas.Count;
                 var secretShareLength = secret.Length / activeReplicasCount;
-                var secretShares = Enumerable
-                    .Range(0, activeReplicasCount)
-                    .Select(j => j != activeReplicasCount - 1
-                        ? secret.Substring(j * secretShareLength, secretShareLength)
-                        : secret.Substring(j * secretShareLength))
-                    .ToArray();
+                var secretShares = activeReplicas
+                    .ToDictionary(
+                        r => r.Id,
+                        _ =>
+                        {
+                            var secretShare = secret.Substring(0, Math.Min(secretShareLength, secret.Length));
+
+                            secret = secret.Substring(secretShare.Length - 1);
+
+                            return secretShare;
+                        });
 
                 var encryptedReplicaSecrets = new Dictionary<int, byte[]>();
 
@@ -59,7 +74,7 @@ namespace Consensus.FastBFT.Tees
                         encryptedReplicaSecrets);
                 }
 
-                var signedSecretHash = Crypto.Sign(secretHash.ToString() + counter + viewNumber);
+                var signedSecretHash = Crypto.Sign(primaryReplica.PrivateKey, secretHash.ToString() + counter + ViewNumber);
 
                 result.Add(signedSecretHash, encryptedReplicaSecrets);
             }
@@ -69,33 +84,32 @@ namespace Consensus.FastBFT.Tees
 
         public string RequestCounter(uint x)
         {
-            latestCounter++;
-            return Crypto.Sign(x.ToString() + latestCounter + viewNumber);
+            LatestCounter++;
+            return Crypto.Sign(primaryReplica.PrivateKey, x.ToString() + LatestCounter + ViewNumber);
         }
 
         private void ShareSecretAmongReplicas(
-            KeyValuePair<int, int[]> replica,
-            IReadOnlyList<string> secretShares,
+            Replica replica,
+            IReadOnlyDictionary<int, string> secretShares,
             uint counter,
             uint secretHash,
             IDictionary<int, byte[]> encryptedReplicaSecrets)
         {
-            var replicaId = replica.Key;
-            var childReplicaIds = replica.Value;
-            var childrenSecretHashes = childReplicaIds
+            var childrenSecretHashes = replica.ChildReplicas
+                .OrderBy(chr => chr.Id)
                 .ToDictionary(
-                    rid => rid,
-                    rid =>
+                    chr => chr.Id,
+                    chr =>
                     {
-                        var childSecretShares = new[] { secretShares[rid] }
-                            .Concat(activeReplicas[rid].OrderBy(chrid => chrid).Select(chrid => secretShares[chrid]))
+                        var childSecretShares = new[] { secretShares[chr.Id] }
+                            .Concat(chr.ChildReplicas.Select(chr2 => secretShares[chr2.Id]))
                             .ToArray();
 
                         return Crypto.GetHash(string.Join(string.Empty, childSecretShares));
                     });
 
-            var secretShare = secretShares[replicaId];
             byte[] replicaSecret;
+            var secretShare = secretShares[replica.Id];
 
             using (var memory = new MemoryStream())
             using (var writer = new BinaryWriter(memory))
@@ -103,7 +117,7 @@ namespace Consensus.FastBFT.Tees
                 writer.Write(secretShare.Length);
                 writer.Write(secretShare);
                 writer.Write(counter);
-                writer.Write(viewNumber);
+                writer.Write(ViewNumber);
 
                 writer.Write(childrenSecretHashes.Count);
                 foreach (var childrenSecretHash in childrenSecretHashes)
@@ -117,7 +131,7 @@ namespace Consensus.FastBFT.Tees
                 replicaSecret = memory.ToArray();
             }
 
-            encryptedReplicaSecrets.Add(replicaId, Crypto.EncryptAuth(replicaSecret, replicaViewKeys[replicaId]));
+            encryptedReplicaSecrets.Add(replica.Id, Crypto.EncryptAuth(replicaViewKeys[replica.Id], replicaSecret));
         }
     }
 }

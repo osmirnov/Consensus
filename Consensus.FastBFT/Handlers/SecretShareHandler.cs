@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
-using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Handlers
 {
@@ -23,7 +23,7 @@ namespace Consensus.FastBFT.Handlers
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
-            if (replica.Tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
                 replica.ParentReplica.SendMessage(
                     new SuspectMessage

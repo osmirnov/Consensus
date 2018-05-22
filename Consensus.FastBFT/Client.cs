@@ -82,7 +82,7 @@ namespace Consensus.FastBFT
 
         private int? GenerateTransactionOrPass()
         {
-            if (rnd.Next(100) % 33 != 1) return null;
+            if (rnd.Next(100) % (33 + id) != 1) return null;
 
             return rnd.Next();
         }

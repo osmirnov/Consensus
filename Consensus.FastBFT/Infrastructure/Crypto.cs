@@ -4,35 +4,26 @@ using System.Text;
 
 namespace Consensus.FastBFT.Infrastructure
 {
-    public class Crypto
+    public static class Crypto
     {
-        private readonly string publicKey;
-        private readonly string privateKey;
-
-        public Crypto(string publicKey, string privateKey)
-        {
-            this.publicKey = publicKey;
-            this.privateKey = privateKey;
-        }
-
-        public string Encrypt(string str)
+        public static string Encrypt(string publicKey, string str)
         {
             return publicKey + str;
         }
 
-        public byte[] EncryptAuth(byte[] buffer, byte key)
+        public static byte[] EncryptAuth(byte key, byte[] buffer)
         {
             return (new byte[] { key, 0xff })
                 .Concat(buffer)
                 .ToArray();
         }
 
-        public string Decrypt(string encryptedStr)
+        public static string Decrypt(string privateKey, string encryptedStr)
         {
-            return encryptedStr.Substring(encryptedStr.IndexOf(publicKey), publicKey.Length);
+            return encryptedStr.Substring(encryptedStr.IndexOf(privateKey), privateKey.Length);
         }
 
-        public byte[] DecryptAuth(byte[] encryptedBuffer, byte key)
+        public static byte[] DecryptAuth(byte key, byte[] encryptedBuffer)
         {
             if (encryptedBuffer[0] != key) throw new Exception("Invalid encryption");
             if (encryptedBuffer[1] != 0xff) throw new Exception("Invalid encryption");
@@ -40,18 +31,18 @@ namespace Consensus.FastBFT.Infrastructure
             return encryptedBuffer.Skip(2).ToArray();
         }
 
-        public string Sign(string str)
+        public static string Sign(string privateKey, string str)
         {
             return privateKey + str;
         }
 
-        public bool Verify(string signedStr, out byte[] buffer)
+        public static bool Verify(string publicKey, string signedStr, out byte[] buffer)
         {
             buffer = Encoding.UTF8.GetBytes(signedStr.Substring(signedStr.IndexOf(publicKey), publicKey.Length));
             return true;
         }
 
-        public uint GetHash(string str)
+        public static uint GetHash(string str)
         {
             return (uint)str.GetHashCode() ^ 397;
         }

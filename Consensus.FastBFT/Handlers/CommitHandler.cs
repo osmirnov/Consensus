@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
 
@@ -13,13 +14,12 @@ namespace Consensus.FastBFT.Handlers
         public static void Handle(
             CommitMessage message,
             Replica replica,
-            PrimaryReplica primaryReplica,
             uint secretHash,
             int[] block,
             byte[] encryptedReplicaSecret,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
-            if (replica.Tee.Crypto.GetHash(message.Secret) == secretHash)
+            if (Crypto.GetHash(message.Secret) == secretHash)
             {
                 // perform the same op as a primary replica
                 var commitResult = block.Sum();
@@ -31,6 +31,7 @@ namespace Consensus.FastBFT.Handlers
                     uint nextSecretHash;
 
                     replica.Tee.VerifyCounter(
+                        replica.PrimaryReplica.PublicKey,
                         message.CommitResultHashCounterViewNumber,
                         encryptedReplicaSecret,
                         out nextSecretShare,
@@ -48,7 +49,7 @@ namespace Consensus.FastBFT.Handlers
                                 {
                                     if (t.IsCompleted)
                                     {
-                                        primaryReplica.SendMessage(
+                                        replica.PrimaryReplica.SendMessage(
                                             new SuspectMessage
                                             {
                                                 ReplicaId = childReplica.Id

@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,19 +11,27 @@ namespace Consensus.FastBFT.Replicas
 {
     public class Replica
     {
-        private PrimaryReplica primaryReplica;
-
         protected ConcurrentQueue<Message> MessageBus = new ConcurrentQueue<Message>();
 
-        public int Id;
-        public Tee Tee;
-        public Replica ParentReplica;
-        public IList<Replica> ChildReplicas = new List<Replica>(2);
+        public int Id { get; set; }
+        public Tee Tee { get; set; }
+        public Replica PrimaryReplica { get; set; }
+        public Replica ParentReplica { get; set; }
+        public IList<Replica> ChildReplicas { get; set; } = new List<Replica>(2);
 
-        public void Run(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
+
+        public Replica()
         {
-            this.primaryReplica = primaryReplica;
+            PrivateKey = Guid.NewGuid().ToString("N");
+            PublicKey = PrivateKey;
+        }
 
+        public string PublicKey { get; }
+
+        public string PrivateKey { get; }
+
+        public void Run(CancellationToken cancellationToken)
+        {
             // process messages
             Task.Factory.StartNew(() =>
             {
@@ -33,6 +42,8 @@ namespace Consensus.FastBFT.Replicas
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
+
+                Log("Running...");
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
@@ -58,7 +69,6 @@ namespace Consensus.FastBFT.Replicas
                             Tee,
                             replicaSecret,
                             childSecretHashes,
-                            primaryReplica,
                             this,
                             out block,
                             out replicaSecretShare,
@@ -87,7 +97,6 @@ namespace Consensus.FastBFT.Replicas
                         CommitHandler.Handle(
                             commitMessage,
                             this,
-                            primaryReplica,
                             secretHash,
                             block,
                             replicaSecret,
@@ -95,12 +104,19 @@ namespace Consensus.FastBFT.Replicas
                         MessageBus.TryDequeue(out message);
                     }
                 }
+
+                Log("Stopped.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         public void SendMessage(Message message)
         {
             MessageBus.Enqueue(message);
+        }
+
+        private void Log(string message)
+        {
+            Console.WriteLine($"Replica #{Id}: {message}");
         }
     }
 }

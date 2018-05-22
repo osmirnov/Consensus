@@ -16,7 +16,6 @@ namespace Consensus.FastBFT.Handlers
             Tee tee,
             byte[] replicaSecret,
             Dictionary<int, uint> childSecretHashes,
-            PrimaryReplica primaryReplica,
             Replica replica,
             out int[] block,
             out string secretShare,
@@ -29,6 +28,7 @@ namespace Consensus.FastBFT.Handlers
             Dictionary<int, uint> childrenSecretHashes;
 
             tee.VerifyCounter(
+                replica.PrimaryReplica.PublicKey,
                 requestCounterViewNumber,
                 replicaSecret,
                 out secretShare,
@@ -46,7 +46,7 @@ namespace Consensus.FastBFT.Handlers
                         {
                             if (t.IsCompleted)
                             {
-                                primaryReplica.SendMessage(
+                                replica.PrimaryReplica.SendMessage(
                                     new SuspectMessage
                                     {
                                         ReplicaId = childReplica.Id

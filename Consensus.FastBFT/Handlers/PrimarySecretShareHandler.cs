@@ -26,7 +26,7 @@ namespace Consensus.FastBFT.Handlers
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
-            if (primaryReplica.Tee.Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
                 return;
             }
@@ -64,7 +64,7 @@ namespace Consensus.FastBFT.Handlers
 
                 var request = string.Join(string.Empty, block);
                 var commitResult = block.Sum();
-                var commitResultHash = primaryReplica.Tee.Crypto.GetHash(request + commitResult);
+                var commitResultHash = Crypto.GetHash(request + commitResult);
 
                 var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
 

@@ -17,7 +17,7 @@ namespace Consensus.FastBFT
         }
 
         private const int clientsCount = 12;
-        private const int replicasCount = 6;
+        private const int replicasCount = 9;
 
         private static readonly ConcurrentDictionary<string, Interval> consensusIntervals = new ConcurrentDictionary<string, Interval>();
 
@@ -87,7 +87,8 @@ namespace Consensus.FastBFT
                 .Select(rid => new Replica
                 {
                     Id = rid,
-                    Tee = new Tee { isActive = true }
+                    Tee = new Tee { IsActive = true },
+                    PrimaryReplica = primaryReplica
                 })
                 .ToArray();
 
@@ -95,10 +96,11 @@ namespace Consensus.FastBFT
 
             foreach (var secondaryReplica in secondaryReplicas)
             {
-                secondaryReplica.Run(primaryReplica, cancellationToken);
+                secondaryReplica.Run(cancellationToken);
             }
 
-            primaryReplica.Tee = new PrimaryTee(ReplicaTopology.ToGraph(primaryReplica));
+            primaryReplica.Tee = new PrimaryTee();
+            primaryReplica.Tee.Initialize(primaryReplica, ReplicaTopology.GetActiveReplicas(primaryReplica));
             primaryReplica.Run(secondaryReplicas, cancellationToken);
 
             return primaryReplica;
