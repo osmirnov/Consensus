@@ -1,33 +1,27 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Replicas;
 using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT
 {
-    class Program
+    internal class Program
     {
-        class Interval
+        private class Interval
         {
-            public DateTime from = DateTime.Now;
-            public DateTime to = DateTime.Now;
+            public readonly DateTime From = DateTime.Now;
+            public readonly DateTime To = DateTime.Now;
         }
 
-        const int clientsCount = 12;
-        const int replicasCount = 6;
-        const int intervalBetweenTransactions = 2; // seconds
+        private const int clientsCount = 12;
+        private const int replicasCount = 6;
 
-        static int[] clientIds = Enumerable.Range(0, clientsCount).ToArray();
-        static int[] replicaIds = Enumerable.Range(0, replicasCount).ToArray();
-        static PrimaryReplica primaryReplica;
+        private static readonly ConcurrentDictionary<string, Interval> consensusIntervals = new ConcurrentDictionary<string, Interval>();
 
-        static ConcurrentDictionary<string, Interval> consensusIntervals = new ConcurrentDictionary<string, Interval>();
-        static Random rnd = new Random(Environment.TickCount);
-
-        static void Main(string[] args)
+        private static void Main()
         {
             var from = DateTime.Now;
 
@@ -46,35 +40,14 @@ namespace Consensus.FastBFT
 
             Thread.Sleep(2500);
 
-            var intervals = consensusIntervals
-                .Select(ci => ci.Value)
-                .Where(i => (i.to - i.from).TotalSeconds > 3)
-                .OrderBy(i => i.to - i.from)
-                .ToList();
-            var minInterval = intervals.FirstOrDefault();
-            var maxInterval = intervals.LastOrDefault();
-            var avgInterval = intervals.Sum(i => (i.to - i.from).TotalSeconds) / intervals.Count;
-
-            Console.WriteLine($"The time spent on emulation was {(to - from).TotalSeconds}s");
-            //Console.WriteLine($"The time between transactions was {intervalBetweenTransactions}s");
-            //Console.WriteLine($"The time for after speaker election was {waitTimeAfterSpeakerElection}ms");
-            //Console.WriteLine($"Avg network latency was {(maxNetworkLatency - minNetworkLatency) / 2}ms");
-            //Console.WriteLine($"The consesus were reached {intervals.Count}");
-
-            if (minInterval != null)
-                Console.WriteLine($"The min consensus took {(minInterval.to - minInterval.from).TotalSeconds}s");
-
-            if (maxInterval != null)
-                Console.WriteLine($"The max consensus took {(maxInterval.to - maxInterval.from).TotalSeconds}s");
-
-            Console.WriteLine($"The avg consensus took {avgInterval}s");
+            PrintRunSummary(to, from);
 
             Console.ReadKey();
         }
 
         private static void RunClients(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
         {
-            var clients = clientIds
+            var clients = Enumerable.Range(0, clientsCount)
                 .Select(cid => new Client(cid))
                 .ToArray();
 
@@ -84,8 +57,11 @@ namespace Consensus.FastBFT
             }
         }
 
-        private static PrimaryReplica RunReplicas(CancellationToken token)
+        private static PrimaryReplica RunReplicas(CancellationToken cancellationToken)
         {
+            var rnd = new Random(Environment.TickCount);
+            var replicaIds = Enumerable.Range(0, replicasCount).ToArray();
+
             var workingReplicaIds = replicaIds
                 .OrderBy(r => rnd.Next(replicaIds.Length))
                 .Take(replicaIds.Length * 2 / 3)
@@ -104,81 +80,51 @@ namespace Consensus.FastBFT
                 .ToArray();
 
             var primaryReplicaId = activeReplicaIds.First();
+            var primaryReplica = new PrimaryReplica { Id = primaryReplicaId };
 
             var secondaryReplicas = activeReplicaIds
                 .Where(rid => rid != primaryReplicaId)
-                .Select(rid =>
+                .Select(rid => new Replica
                 {
-                    var replica = new Replica();
-                    replica.Id = rid;
-                    replica.Tee = new Tee();
-                    replica.Tee.isActive = true;
-                    return replica;
+                    Id = rid,
+                    Tee = new Tee { isActive = true }
                 })
                 .ToArray();
 
-            for (var i = 0; i < secondaryReplicas.Length; i++)
-            {
-                var secondaryReplica = secondaryReplicas[i];
+            ReplicaTopology.Discover(primaryReplica, secondaryReplicas);
 
-                secondaryReplica.Run(primaryReplica, token);
+            foreach (var secondaryReplica in secondaryReplicas)
+            {
+                secondaryReplica.Run(primaryReplica, cancellationToken);
             }
 
-            primaryReplica = new PrimaryReplica();
-            primaryReplica.Id = primaryReplicaId;
-
-            DiscoverReplicaTopology(primaryReplica, secondaryReplicas);
-
-            var activeReplicas = new Dictionary<int, int[]>(activeReplicaIds.Length);
-
-            ConvertReplicaTopologyToGraph(primaryReplica, activeReplicas);
-
-            primaryReplica.Tee = new PrimaryTee(activeReplicas);
-
-            primaryReplica.Run(secondaryReplicas, token);
+            primaryReplica.Tee = new PrimaryTee(ReplicaTopology.ToGraph(primaryReplica));
+            primaryReplica.Run(secondaryReplicas, cancellationToken);
 
             return primaryReplica;
         }
 
-        private static void DiscoverReplicaTopology(Replica parentReplica, IEnumerable<Replica> secondaryReplicas)
+        private static void PrintRunSummary(DateTime to, DateTime from)
         {
-            if (parentReplica == null) return;
+            var intervals = consensusIntervals
+                .Select(ci => ci.Value)
+                .Where(i => (i.To - i.From).TotalSeconds > 3)
+                .OrderBy(i => i.To - i.From)
+                .ToList();
+            var minInterval = intervals.FirstOrDefault();
+            var maxInterval = intervals.LastOrDefault();
+            var avgInterval = intervals.Sum(i => (i.To - i.From).TotalSeconds) / intervals.Count;
 
-            var leftReplicas = secondaryReplicas.Skip(1);
-            var rightReplicas = leftReplicas.Skip(1);
-            var restReplicas = rightReplicas.Skip(1);
+            Console.WriteLine($"The time spent on emulation was {(to - from).TotalSeconds}s");
+            Console.WriteLine($"The consensus were reached {intervals.Count}");
 
-            if (leftReplicas.Any())
-            {
-                var leftReplica = leftReplicas.FirstOrDefault();
+            if (minInterval != null)
+                Console.WriteLine($"The min consensus took {(minInterval.To - minInterval.From).TotalSeconds}s");
 
-                leftReplica.ParentReplica = parentReplica;
+            if (maxInterval != null)
+                Console.WriteLine($"The max consensus took {(maxInterval.To - maxInterval.From).TotalSeconds}s");
 
-                parentReplica.ChildReplicas.Add(leftReplica);
-
-                DiscoverReplicaTopology(leftReplica, restReplicas.Take(restReplicas.Count() / 2));
-            }
-
-            if (rightReplicas.Any())
-            {
-                var rightReplica = rightReplicas.FirstOrDefault();
-
-                rightReplica.ParentReplica = parentReplica;
-
-                parentReplica.ChildReplicas.Add(rightReplica);
-
-                DiscoverReplicaTopology(rightReplica, restReplicas.Skip(restReplicas.Count() / 2));
-            }
-        }
-
-        private static void ConvertReplicaTopologyToGraph(Replica replica, IDictionary<int, int[]> replicaChildren)
-        {
-            replicaChildren.Add(replica.Id, replica.ChildReplicas.Select(chr => chr.Id).OrderBy(chrid => chrid).ToArray());
-
-            foreach (var childReplica in replica.ChildReplicas)
-            {
-                ConvertReplicaTopologyToGraph(childReplica, replicaChildren);
-            }
+            Console.WriteLine($"The avg consensus took {avgInterval}s");
         }
     }
 }

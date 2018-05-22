@@ -10,9 +10,9 @@ namespace Consensus.FastBFT
 {
     public class Client
     {
-        private Random rnd = new Random(Environment.TickCount);
-        private int id;
-        private ConcurrentQueue<Message> MessageBus = new ConcurrentQueue<Message>();
+        private readonly Random rnd = new Random(Environment.TickCount);
+        private readonly int id;
+        private readonly ConcurrentQueue<Message> messageBus = new ConcurrentQueue<Message>();
 
         public Client(int id)
         {
@@ -21,70 +21,109 @@ namespace Consensus.FastBFT
 
         public void Run(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
         {
-            var transactionTokenSources = new ConcurrentDictionary<int, CancellationTokenSource>();
-
             // process transactions
-            Task.Factory.StartNew(() =>
-            {
-                while (cancellationToken.IsCancellationRequested == false)
-                {
-                    GenerateTransaction(primaryReplica, transactionTokenSources);
-                }
-            }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-
             // process messages
-            Task.Factory.StartNew(() =>
+            Task.Factory.StartNew(async () =>
             {
+                int? transaction = null;
+
+                Log("Running...");
+
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    Message message;
-                    if (MessageBus.TryPeek(out message) == false)
+                    if (transaction != null)
                     {
-                        Thread.Sleep(1000);
+                        // there is an outstanding transaction -> wait for consensus on it
+                        await Task.Delay(1000, cancellationToken);
                         continue;
                     }
 
+                    // no transaction -> give a chance to generate it
+                    transaction = GenerateTransactionOrPass();
 
-                    MessageBus.TryDequeue(out message);
+                    if (transaction == null)
+                    {
+                        // the client has no transaction at this time
+                        await Task.Delay(1000, cancellationToken);
+                        continue;
+                    }
+
+                    Log($"The transaction #{transaction} was generated.");
+
+                    // a new transaction was generated -> send this to primary replica
+                    SendTransactionToPrimaryReplica(primaryReplica, transaction.Value);
+
+                    Log($"The transaction #{transaction} was sent to the primary replica.");
+
+                    // the primary replica got the transaction -> wait until consensus on this will be reached
+                    var replyTask = WaitUntilTimeoutOrReplyFromPrimaryReplica(cancellationToken);
+
+                    await replyTask.ConfigureAwait(false);
+
+                    if (replyTask.IsCanceled)
+                    {
+                        Log($"The transaction #{transaction} was NOT approved.");
+                    }
                 }
+
+                Log("Stopped.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
         public void SendMessage(Message message)
         {
-            MessageBus.Enqueue(message);
+            messageBus.Enqueue(message);
         }
 
-        private void GenerateTransaction(
-            PrimaryReplica primaryReplica,
-            ConcurrentDictionary<int, CancellationTokenSource> transactionTokenSources)
+        private void Log(string message)
         {
-            if (rnd.Next(100) % 33 == 1)
+            Console.WriteLine($"Client #{id}: {message}");
+        }
+
+        private int? GenerateTransactionOrPass()
+        {
+            if (rnd.Next(100) % 33 != 1) return null;
+
+            return rnd.Next();
+        }
+
+        private static void SendTransactionToPrimaryReplica(Replica primaryReplica, int transaction)
+        {
+            // transaction was sent to primary replica
+            Network.EmulateLatency();
+
+            primaryReplica.SendMessage(new TransactionMessage
             {
-                var transaction = rnd.Next();
+                Transaction = transaction
+            });
+        }
 
-                Console.WriteLine($"The transaction #{transaction} was generated");
+        private async Task WaitUntilTimeoutOrReplyFromPrimaryReplica(CancellationToken cancellationToken)
+        {
+            // wait for reply 10 seconds
+            using (var cancellationTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+            using (var linkedTokenSource =
+                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cancellationTokenSource.Token))
+            {
+                var linkedToken = linkedTokenSource.Token;
 
-                // transaction was sent to primary replica
-                Network.EmulateLatency();
-
-                primaryReplica.SendMessage(new TransactionMessage
+                await Task.Factory.StartNew(async () =>
                 {
-                    Transaction = transaction
-                });
-
-                var tokenSource = new CancellationTokenSource();
-
-                Task.Delay(15 * 1000, tokenSource.Token)
-                    .ContinueWith(t =>
+                    while (linkedToken.IsCancellationRequested == false)
                     {
-                        if (t.IsCompleted)
+                        Message message;
+                        if (messageBus.TryDequeue(out message) == false)
                         {
-                            // timeout
+                            // there is no reply message so far
+                            await Task.Delay(1000, linkedToken);
+                            continue;
                         }
-                    });
 
-                transactionTokenSources.TryAdd(transaction, tokenSource);
+                        // message was received
+                        Log(message.ToString());
+                        break;
+                    }
+                }, linkedToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             }
         }
     }

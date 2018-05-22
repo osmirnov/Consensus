@@ -53,6 +53,7 @@
     <Compile Include="Handlers\TransactionHandler.cs" />
     <Compile Include="Infrastructure\Crypto.cs" />
     <Compile Include="Infrastructure\Network.cs" />
+    <Compile Include="Infrastructure\ReplicaTopology.cs" />
     <Compile Include="Messages\ReplyMessage.cs" />
     <Compile Include="Messages\Message.cs" />
     <Compile Include="Messages\CommitMessage.cs" />
