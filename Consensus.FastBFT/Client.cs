@@ -87,7 +87,7 @@ namespace Consensus.FastBFT
             return rnd.Next();
         }
 
-        private static void SendTransactionToPrimaryReplica(Replica primaryReplica, int transaction)
+        private static void SendTransactionToPrimaryReplica(PrimaryReplica primaryReplica, int transaction)
         {
             // transaction was sent to primary replica
             Network.EmulateLatency();

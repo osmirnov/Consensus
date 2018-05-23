@@ -6,7 +6,6 @@ using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
-using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT
 {
@@ -82,14 +81,12 @@ namespace Consensus.FastBFT
                 .ToArray();
 
             var primaryReplicaId = activeReplicaIds.First();
-            var primaryReplica = new PrimaryReplica { Id = primaryReplicaId };
+            var primaryReplica = new PrimaryReplica(primaryReplicaId);
 
             var secondaryReplicas = activeReplicaIds
                 .Where(rid => rid != primaryReplicaId)
-                .Select(rid => new Replica
+                .Select(rid => new Replica(rid, true)
                 {
-                    Id = rid,
-                    Tee = new Tee { IsActive = true },
                     PrimaryReplica = primaryReplica
                 })
                 .ToArray();
@@ -101,10 +98,8 @@ namespace Consensus.FastBFT
                 secondaryReplica.Run(cancellationToken);
             }
 
-            var primaryTee = new PrimaryTee();
-            var encryptedViewKeys = primaryTee.Initialize(ReplicaTopology.GetActiveReplicas(primaryReplica));
+            var encryptedViewKeys = primaryReplica.Tee.Initialize(ReplicaTopology.GetActiveReplicas(primaryReplica));
 
-            primaryReplica.Tee = primaryTee;
             primaryReplica.Run(secondaryReplicas, cancellationToken);
 
             SyncReplicas(encryptedViewKeys, secondaryReplicas);

@@ -9,15 +9,15 @@ using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Replicas
 {
-    public class Replica
+    public class Replica : ReplicaBase
     {
-        protected ConcurrentQueue<Message> MessageBus = new ConcurrentQueue<Message>();
+        public Tee Tee { get; }
+        public PrimaryReplica PrimaryReplica { get; set; }
 
-        public int Id { get; set; }
-        public virtual Tee Tee { get; set; }
-        public Replica PrimaryReplica { get; set; }
-        public Replica ParentReplica { get; set; }
-        public IList<Replica> ChildReplicas { get; set; } = new List<Replica>(2);
+        public Replica(int id, bool isActive) : base(id)
+        {
+            Tee = new Tee(PrivateKey, PublicKey) { IsActive = isActive };
+        }
 
         public void Run(CancellationToken cancellationToken)
         {
@@ -36,8 +36,8 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    Message message;
-                    if (MessageBus.TryPeek(out message) == false)
+                    var message = ReceiveMessage();
+                    if (message == null)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -47,7 +47,6 @@ namespace Consensus.FastBFT.Replicas
                     if (preprocessingMessage != null)
                     {
                         PreprocessingHandler.Handle(preprocessingMessage, out replicaSecret);
-                        MessageBus.TryDequeue(out message);
                     }
 
                     var prepareMessage = message as PrepareMessage;
@@ -64,7 +63,6 @@ namespace Consensus.FastBFT.Replicas
                             out secretHash,
                             secretShareMessageTokenSources
                         );
-                        MessageBus.TryDequeue(out message);
                     }
 
                     var secretShareMessage = message as SecretShareMessage;
@@ -77,7 +75,6 @@ namespace Consensus.FastBFT.Replicas
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
-                        MessageBus.TryDequeue(out message);
                     }
 
                     var commitMessage = message as CommitMessage;
@@ -90,17 +87,11 @@ namespace Consensus.FastBFT.Replicas
                             block,
                             replicaSecret,
                             secretShareMessageTokenSources);
-                        MessageBus.TryDequeue(out message);
                     }
                 }
 
                 Log("Stopped.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
-        }
-
-        public void SendMessage(Message message)
-        {
-            MessageBus.Enqueue(message);
         }
 
         private void Log(string message)

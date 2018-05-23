@@ -9,12 +9,16 @@ namespace Consensus.FastBFT.Tees
 {
     public class PrimaryTee : Tee
     {
-        private IReadOnlyCollection<Replica> activeReplicas;
+        private IReadOnlyCollection<ReplicaBase> activeReplicas;
 
         // primary replica -> current active replicas and their view keys
         private readonly Dictionary<int, byte> replicaViewKeys = new Dictionary<int, byte>();
 
-        public IReadOnlyDictionary<int, string> Initialize(IReadOnlyCollection<Replica> activeReplicas)
+        public PrimaryTee(string privateKey, string publicKey): base(privateKey, publicKey)
+        {            
+        }
+
+        public IReadOnlyDictionary<int, string> Initialize(IReadOnlyCollection<ReplicaBase> activeReplicas)
         {
             IsActive = true;
             LatestCounter = 0;
@@ -29,7 +33,7 @@ namespace Consensus.FastBFT.Tees
                 var secretViewKey = (byte)new Random(Environment.TickCount).Next(byte.MaxValue);
                 replicaViewKeys.Add(activeReplica.Id, secretViewKey);
 
-                var encryptedViewKey = Crypto.Encrypt(activeReplica.Tee.PublicKey, secretViewKey.ToString());
+                var encryptedViewKey = Crypto.Encrypt(activeReplica.PublicKey, secretViewKey.ToString());
                 encryptedViewKeys.Add(activeReplica.Id, encryptedViewKey);
             }
 
@@ -86,7 +90,7 @@ namespace Consensus.FastBFT.Tees
                     buffer = memory.ToArray();
                 }
 
-                var signedSecretHash = Crypto.Sign(privateKey, buffer);
+                var signedSecretHash = Crypto.Sign(PrivateKey, buffer);
 
                 result.Add(signedSecretHash, encryptedReplicaSecrets);
             }
@@ -110,11 +114,11 @@ namespace Consensus.FastBFT.Tees
                 buffer = memory.ToArray();
             }
 
-            return Crypto.Sign(privateKey, buffer);
+            return Crypto.Sign(PrivateKey, buffer);
         }
 
         private void ShareSecretAmongReplicas(
-            Replica replica,
+            ReplicaBase replica,
             IReadOnlyDictionary<int, string> secretShares,
             uint counter,
             uint secretHash,

@@ -31,7 +31,7 @@ namespace Consensus.FastBFT.Handlers
                     uint nextSecretHash;
 
                     replica.Tee.VerifyCounter(
-                        replica.PrimaryReplica.Tee.PublicKey,
+                        replica.PrimaryReplica.PublicKey,
                         message.CommitResultHashCounterViewNumber,
                         encryptedReplicaSecret,
                         out nextSecretShare,

@@ -6,7 +6,7 @@ namespace Consensus.FastBFT.Infrastructure
 {
     public class ReplicaTopology
     {
-        public static void Discover(Replica parentReplica, IEnumerable<Replica> secondaryReplicas)
+        public static void Discover(ReplicaBase parentReplica, IEnumerable<Replica> secondaryReplicas)
         {
             if (parentReplica == null || secondaryReplicas.Any() == false) return;
 
@@ -37,9 +37,9 @@ namespace Consensus.FastBFT.Infrastructure
             }
         }
 
-        public static IReadOnlyCollection<Replica> GetActiveReplicas(Replica replica)
+        public static IReadOnlyCollection<ReplicaBase> GetActiveReplicas(ReplicaBase replica)
         {
-            var activeReplicas = new List<Replica>();
+            var activeReplicas = new List<ReplicaBase>();
 
             foreach (var childReplica in replica.ChildReplicas)
             {
@@ -50,7 +50,7 @@ namespace Consensus.FastBFT.Infrastructure
             return activeReplicas;
         }
 
-        private static void GetActiveReplicas(Replica replica, ICollection<Replica> activeReplicas)
+        private static void GetActiveReplicas(ReplicaBase replica, ICollection<ReplicaBase> activeReplicas)
         {
             foreach (var childReplica in replica.ChildReplicas)
             {

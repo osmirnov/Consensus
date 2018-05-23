@@ -11,8 +11,15 @@ using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Replicas
 {
-    public class PrimaryReplica : Replica
+    public class PrimaryReplica : ReplicaBase
     {
+        public PrimaryTee Tee { get; }
+
+        public PrimaryReplica(int id) : base(id)
+        {
+            Tee = new PrimaryTee(PrivateKey, PublicKey);
+        }
+
         public void Run(IEnumerable<Replica> activeReplicas, CancellationToken cancellationToken)
         {
             var blockExchange = new ConcurrentQueue<int[]>();
@@ -27,8 +34,8 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    Message message;
-                    if (MessageBus.TryPeek(out message) == false)
+                    var message = ReceiveMessage();
+                    if (message == null)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -38,7 +45,6 @@ namespace Consensus.FastBFT.Replicas
                     if (transactionMessage != null)
                     {
                         TransactionHandler.Handle(transactionMessage, newBlock, ref lastBlockCreatedAt, blockExchange);
-                        MessageBus.TryDequeue(out message);
                     }
                 }
 
@@ -92,8 +98,8 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    Message message;
-                    if (MessageBus.TryPeek(out message) == false)
+                    var message = ReceiveMessage();
+                    if (message == null)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -112,7 +118,6 @@ namespace Consensus.FastBFT.Replicas
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
-                        MessageBus.TryDequeue(out message);
                     }
                 }
 

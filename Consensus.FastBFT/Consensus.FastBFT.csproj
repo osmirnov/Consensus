@@ -64,6 +64,7 @@
     <Compile Include="Messages\TransactionMessage.cs" />
     <Compile Include="Replicas\PrimaryReplica.cs" />
     <Compile Include="Replicas\Replica.cs" />
+    <Compile Include="Replicas\ReplicaBase.cs" />
     <Compile Include="Tees\PrimaryTee.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
