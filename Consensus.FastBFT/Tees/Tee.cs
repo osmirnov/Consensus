@@ -7,8 +7,8 @@ namespace Consensus.FastBFT.Tees
 {
     public class Tee
     {
-        protected readonly string PrivateKey;
-        protected readonly string PublicKey;
+        private readonly string privateKey;
+        private readonly string publicKey;
 
         public uint LatestCounter { get; protected set; }  // all replicas -> latest counter
         public uint ViewNumber { get; protected set; }     // all replicas -> current view number
@@ -17,8 +17,8 @@ namespace Consensus.FastBFT.Tees
 
         public Tee(string privateKey, string publicKey)
         {
-            PrivateKey = privateKey;
-            PublicKey = publicKey;
+            this.privateKey = privateKey;
+            this.publicKey = publicKey;
         }
 
         // non primary replica

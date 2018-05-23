@@ -7,20 +7,28 @@ using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Tees
 {
-    public class PrimaryTee : Tee
+    public class PrimaryTee
     {
+        private readonly string privateKey;
+        private readonly string publicKey;
+
         private IReadOnlyCollection<ReplicaBase> activeReplicas;
+
+
+        public uint LatestCounter { get; protected set; }  // all replicas -> latest counter
+        public uint ViewNumber { get; protected set; }     // all replicas -> current view number
 
         // primary replica -> current active replicas and their view keys
         private readonly Dictionary<int, byte> replicaViewKeys = new Dictionary<int, byte>();
 
-        public PrimaryTee(string privateKey, string publicKey): base(privateKey, publicKey)
-        {            
+        public PrimaryTee(string privateKey, string publicKey)
+        {
+            this.privateKey = privateKey;
+            this.publicKey = publicKey;
         }
 
         public IReadOnlyDictionary<int, string> Initialize(IReadOnlyCollection<ReplicaBase> activeReplicas)
         {
-            IsActive = true;
             LatestCounter = 0;
             ViewNumber++;
 
@@ -90,7 +98,7 @@ namespace Consensus.FastBFT.Tees
                     buffer = memory.ToArray();
                 }
 
-                var signedSecretHash = Crypto.Sign(PrivateKey, buffer);
+                var signedSecretHash = Crypto.Sign(privateKey, buffer);
 
                 result.Add(signedSecretHash, encryptedReplicaSecrets);
             }
@@ -114,7 +122,7 @@ namespace Consensus.FastBFT.Tees
                 buffer = memory.ToArray();
             }
 
-            return Crypto.Sign(PrivateKey, buffer);
+            return Crypto.Sign(privateKey, buffer);
         }
 
         private void ShareSecretAmongReplicas(
