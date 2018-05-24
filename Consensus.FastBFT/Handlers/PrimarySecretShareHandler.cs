@@ -14,7 +14,7 @@ namespace Consensus.FastBFT.Handlers
         public static void Handle(
             SecretShareMessage message,
             PrimaryReplica primaryReplica,
-            IEnumerable<Replica> activeRelicas,
+            IEnumerable<ReplicaBase> activeRelicas,
             int[] block,
             ref bool isCommitted,
             string secret,

@@ -13,6 +13,8 @@ namespace Consensus.FastBFT.Replicas
 {
     public class PrimaryReplica : ReplicaBase
     {
+        private List<int[]> blockchain = new List<int[]>();
+
         public PrimaryTee Tee { get; }
 
         public PrimaryReplica(int id) : base(id)
@@ -20,11 +22,31 @@ namespace Consensus.FastBFT.Replicas
             Tee = new PrimaryTee(PrivateKey, PublicKey);
         }
 
-        public void Run(IEnumerable<Replica> activeReplicas, CancellationToken cancellationToken)
+        public void Run(IEnumerable<ReplicaBase> activeReplicas, CancellationToken cancellationToken)
         {
-            var blockExchange = new ConcurrentQueue<int[]>();
+            // bootstrapping
+            // if the current replica has missing blocks in it blockchain
+            // it must process blocks that were created after and
+            // majority of active replicas agreed upon
+            var aheadBlocks = new List<int[]>();
+
+            ReplicaTopology.Discover(this, activeReplicas);
+
+            var replicaTree = ReplicaTopology.GetReplicaTree(this);
+            var aheadBlocksOrTree = (aheadBlocks.LastOrDefault() ?? new int[0]).Sum() | replicaTree.Sum();
+            var signedHashAndCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(aheadBlocksOrTree.ToString()));
+            var encryptedViewKeys = Tee.BePrimary(activeReplicas);
+
+            SyncReplicas(
+                aheadBlocks,
+                replicaTree,
+                signedHashAndCounterViewNumber,
+                encryptedViewKeys,
+                activeReplicas);
 
             // process transactions
+            var blockExchange = new ConcurrentQueue<int[]>();
+
             Task.Factory.StartNew(() =>
             {
                 var newBlock = new List<int>();
@@ -118,6 +140,13 @@ namespace Consensus.FastBFT.Replicas
                             childSecretHashes,
                             secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
+
+                        if (isCommitted)
+                        {
+                            blockchain.Add(consensusBlock);
+                            consensusBlock = null;
+                            Log($"The consensus reached on block #{string.Join(string.Empty, consensusBlock)}");
+                        }
                     }
                 }
 
@@ -125,7 +154,30 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        private void DistributeSecret(IEnumerable<Replica> activeReplicas)
+        private static void SyncReplicas(
+            IEnumerable<int[]> aheadBlocks,
+            IEnumerable<int> replicaTree,
+            byte[] signedHashAndCounterViewNumber,
+            IReadOnlyDictionary<int, string> encryptedViewKeys,
+            IEnumerable<ReplicaBase> activeReplicas)
+        {
+            // we sync tee counter and the current view
+            // we assume it is done in parallel and this network delay represents all of them
+            Network.EmulateLatency();
+
+            foreach (var activeReplica in activeReplicas)
+            {
+                activeReplica.SendMessage(new NewViewMessage
+                {
+                    AheadBlocks = aheadBlocks,
+                    ReplicaTree = replicaTree,
+                    SignedHashAndCounterViewNumber = signedHashAndCounterViewNumber,
+                    EncryptedViewKey = encryptedViewKeys[activeReplica.Id]
+                });
+            }
+        }
+
+        private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas)
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
@@ -148,7 +200,7 @@ namespace Consensus.FastBFT.Replicas
             }
         }
 
-        private void InitiateConsesusProcess(IEnumerable<Replica> activeReplicas, int[] block)
+        private void InitiateConsesusProcess(IEnumerable<ReplicaBase> activeReplicas, int[] block)
         {
             // signed block request
             var request = string.Join(string.Empty, block);

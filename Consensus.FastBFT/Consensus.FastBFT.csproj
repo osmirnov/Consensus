@@ -46,6 +46,7 @@
     <Compile Include="Client.cs" />
     <Compile Include="Handlers\Handler.cs" />
     <Compile Include="Handlers\CommitHandler.cs" />
+    <Compile Include="Handlers\NewViewHandler.cs" />
     <Compile Include="Handlers\PrimarySecretShareHandler.cs" />
     <Compile Include="Handlers\SecretShareHandler.cs" />
     <Compile Include="Handlers\PrepareHandler.cs" />
@@ -60,7 +61,7 @@
     <Compile Include="Messages\PrepareMessage.cs" />
     <Compile Include="Messages\SuspectMessage.cs" />
     <Compile Include="Messages\SecretShareMessage.cs" />
-    <Compile Include="Messages\SyncMessage.cs" />
+    <Compile Include="Messages\NewViewMessage.cs" />
     <Compile Include="Messages\TransactionMessage.cs" />
     <Compile Include="Replicas\PrimaryReplica.cs" />
     <Compile Include="Replicas\Replica.cs" />

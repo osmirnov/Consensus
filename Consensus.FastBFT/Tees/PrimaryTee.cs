@@ -12,7 +12,7 @@ namespace Consensus.FastBFT.Tees
         private readonly string privateKey;
         private readonly string publicKey;
 
-        private IReadOnlyCollection<ReplicaBase> activeReplicas;
+        private IEnumerable<ReplicaBase> activeReplicas;
 
 
         public uint LatestCounter { get; protected set; }  // all replicas -> latest counter
@@ -27,7 +27,7 @@ namespace Consensus.FastBFT.Tees
             this.publicKey = publicKey;
         }
 
-        public IReadOnlyDictionary<int, string> Initialize(IReadOnlyCollection<ReplicaBase> activeReplicas)
+        public IReadOnlyDictionary<int, string> BePrimary(IEnumerable<ReplicaBase> activeReplicas)
         {
             LatestCounter = 0;
             ViewNumber++;
@@ -59,7 +59,7 @@ namespace Consensus.FastBFT.Tees
                 // generate secret
                 var secret = Guid.NewGuid().ToString();
                 var secretHash = Crypto.GetHash(secret + counter + ViewNumber);
-                var activeReplicasCount = activeReplicas.Count;
+                var activeReplicasCount = activeReplicas.Count();
                 var secretShareLength = secret.Length / activeReplicasCount;
                 var secretShares = activeReplicas
                     .ToDictionary(

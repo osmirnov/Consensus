@@ -92,6 +92,25 @@ namespace Consensus.FastBFT.Tees
             }
         }
 
+        public byte[] RequestCounter(uint hash)
+        {
+            LatestCounter++;
+
+            byte[] buffer;
+
+            using (var memory = new MemoryStream())
+            using (var writer = new BinaryWriter(memory))
+            {
+                writer.Write(hash);
+                writer.Write(LatestCounter);
+                writer.Write(ViewNumber);
+
+                buffer = memory.ToArray();
+            }
+
+            return Crypto.Sign(privateKey, buffer);
+        }
+
         // used by passive replicas
         public void UpdateCounter(
             string primaryReplicaPublicKey,

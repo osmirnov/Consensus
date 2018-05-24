@@ -31,6 +31,7 @@ namespace Consensus.FastBFT.Replicas
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
+                var signedHashAndCounterViewNumber = new byte[0];
 
                 Log("Running...");
 
@@ -87,6 +88,15 @@ namespace Consensus.FastBFT.Replicas
                             block,
                             replicaSecret,
                             secretShareMessageTokenSources);
+                    }
+
+                    var newViewMessage = message as NewViewMessage;
+                    if (newViewMessage != null)
+                    {
+                        NewViewHandler.Handle(
+                            newViewMessage,
+                            Tee,
+                            out signedHashAndCounterViewNumber);
                     }
                 }
 

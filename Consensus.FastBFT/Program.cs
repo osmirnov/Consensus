@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Consensus.FastBFT.Infrastructure;
-using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT
@@ -91,36 +88,16 @@ namespace Consensus.FastBFT
                 })
                 .ToArray();
 
-            ReplicaTopology.Discover(primaryReplica, secondaryReplicas);
 
             foreach (var secondaryReplica in secondaryReplicas)
             {
                 secondaryReplica.Run(cancellationToken);
             }
 
-            var encryptedViewKeys = primaryReplica.Tee.Initialize(ReplicaTopology.GetActiveReplicas(primaryReplica));
 
             primaryReplica.Run(secondaryReplicas, cancellationToken);
 
-            SyncReplicas(encryptedViewKeys, secondaryReplicas);
-
             return primaryReplica;
-        }
-
-        private static void SyncReplicas(IReadOnlyDictionary<int, string> encryptedViewKeys, IEnumerable<Replica> activeReplicas)
-        {
-            // we sync tee counter and the current view
-            // we assume it is done in parallel and this network delay represents all of them
-            Network.EmulateLatency();
-
-            foreach (var activeReplica in activeReplicas)
-            {
-                activeReplica.SendMessage(new SyncMessage
-                {
-                    //SignedPayloadAndCounterViewNumber = Tee.LatestCounter,
-                    EncryptedViewKey = encryptedViewKeys[activeReplica.Id]
-                });
-            }
         }
 
         private static void PrintRunSummary(DateTime to, DateTime from)

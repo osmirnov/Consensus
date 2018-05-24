@@ -6,7 +6,7 @@ namespace Consensus.FastBFT.Infrastructure
 {
     public class ReplicaTopology
     {
-        public static void Discover(ReplicaBase parentReplica, IEnumerable<Replica> secondaryReplicas)
+        public static void Discover(ReplicaBase parentReplica, IEnumerable<ReplicaBase> secondaryReplicas)
         {
             if (parentReplica == null || secondaryReplicas.Any() == false) return;
 
@@ -37,25 +37,25 @@ namespace Consensus.FastBFT.Infrastructure
             }
         }
 
-        public static IReadOnlyCollection<ReplicaBase> GetActiveReplicas(ReplicaBase replica)
+        public static IEnumerable<int> GetReplicaTree(ReplicaBase replica)
         {
-            var activeReplicas = new List<ReplicaBase>();
+            var replicaIds = new List<int>();
 
             foreach (var childReplica in replica.ChildReplicas)
             {
-                activeReplicas.Add(childReplica);
-                GetActiveReplicas(childReplica, activeReplicas);
+                replicaIds.Add(childReplica.Id);
+                GetReplicaTree(childReplica, replicaIds);
             }
 
-            return activeReplicas;
+            return replicaIds;
         }
 
-        private static void GetActiveReplicas(ReplicaBase replica, ICollection<ReplicaBase> activeReplicas)
+        private static void GetReplicaTree(ReplicaBase replica, ICollection<int> replicaIds)
         {
             foreach (var childReplica in replica.ChildReplicas)
             {
-                activeReplicas.Add(childReplica);
-                GetActiveReplicas(childReplica, activeReplicas);
+                replicaIds.Add(childReplica.Id);
+                GetReplicaTree(childReplica, replicaIds);
             }
         }
     }
