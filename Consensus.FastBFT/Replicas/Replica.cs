@@ -95,7 +95,7 @@ namespace Consensus.FastBFT.Replicas
                     {
                         NewViewHandler.Handle(
                             newViewMessage,
-                            Tee,
+                            this,
                             out signedHashAndCounterViewNumber);
                     }
                 }
