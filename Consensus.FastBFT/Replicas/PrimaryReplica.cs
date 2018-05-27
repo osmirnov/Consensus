@@ -50,7 +50,6 @@ namespace Consensus.FastBFT.Replicas
             Task.Factory.StartNew(() =>
             {
                 var newBlock = new List<int>();
-                var lastBlockCreatedAt = DateTime.Now;
 
                 Log("Running transaction listening...");
 
@@ -66,7 +65,7 @@ namespace Consensus.FastBFT.Replicas
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        TransactionHandler.Handle(transactionMessage, newBlock, ref lastBlockCreatedAt, blockExchange);
+                        TransactionHandler.Handle(transactionMessage, newBlock, blockExchange);
                     }
                 }
 
