@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
 
@@ -25,45 +24,20 @@ namespace Consensus.FastBFT
             // process messages
             Task.Factory.StartNew(async () =>
             {
-                int? transaction = null;
-
                 Log("Running...");
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    if (transaction != null)
-                    {
-                        // there is an outstanding transaction -> wait for consensus on it
-                        await Task.Delay(1000, cancellationToken);
-                        continue;
-                    }
-
-                    // no transaction -> give a chance to generate it
-                    transaction = GenerateTransactionOrPass();
-
-                    if (transaction == null)
-                    {
-                        // the client has no transaction at this time
-                        await Task.Delay(1000, cancellationToken);
-                        continue;
-                    }
+                    var transaction = GenerateTransaction();
 
                     Log($"The transaction #{transaction} was generated.");
 
                     // a new transaction was generated -> send this to primary replica
-                    SendTransactionToPrimaryReplica(primaryReplica, transaction.Value);
+                    SendTransactionToPrimaryReplica(primaryReplica, transaction);
 
                     Log($"The transaction #{transaction} was sent to the primary replica.");
 
-                    // the primary replica got the transaction -> wait until consensus on this will be reached
-                    var replyTask = WaitUntilTimeoutOrReplyFromPrimaryReplica(cancellationToken);
-
-                    await replyTask.ConfigureAwait(false);
-
-                    if (replyTask.IsCanceled)
-                    {
-                        Log($"The transaction #{transaction} was NOT approved.");
-                    }
+                    await Task.Delay(100);
                 }
 
                 Log("Stopped.");
@@ -80,18 +54,13 @@ namespace Consensus.FastBFT
             Console.WriteLine($"Client #{id}: {message}");
         }
 
-        private int? GenerateTransactionOrPass()
+        private int GenerateTransaction()
         {
-            if (rnd.Next(100) % (33 + id) != 1) return null;
-
             return rnd.Next();
         }
 
         private static void SendTransactionToPrimaryReplica(PrimaryReplica primaryReplica, int transaction)
         {
-            // transaction was sent to primary replica
-            Network.EmulateLatency();
-
             primaryReplica.SendMessage(new TransactionMessage
             {
                 Transaction = transaction
