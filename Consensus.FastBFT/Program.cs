@@ -14,7 +14,7 @@ namespace Consensus.FastBFT
             public readonly DateTime To = DateTime.Now;
         }
 
-        private const int clientsCount = 12;
+        private const int clientsCount = 1;
         private const int replicasCount = 9;
 
         private static readonly ConcurrentDictionary<string, Interval> consensusIntervals = new ConcurrentDictionary<string, Interval>();

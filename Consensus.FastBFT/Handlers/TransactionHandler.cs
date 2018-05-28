@@ -8,12 +8,11 @@ namespace Consensus.FastBFT.Handlers
 {
     public class TransactionHandler
     {
-        public const int IntervalBetweenBlocks = 1;
+        public const int MinTransactionsCountInBlock = 10;
 
         public static void Handle(
             TransactionMessage message,
             IList<int> block,
-            ref DateTime lastBlockCreatedAt,
             ConcurrentQueue<int[]> blockExchange)
         {
             var transaction = message.Transaction;
@@ -24,13 +23,12 @@ namespace Consensus.FastBFT.Handlers
             }
 
             var now = DateTime.Now;
-            if ((now - lastBlockCreatedAt).TotalSeconds > IntervalBetweenBlocks && block.Any())
+            if (block.Count > MinTransactionsCountInBlock)
             {
                 var blockCopy = block.ToArray();
 
                 lock (block)
                 {
-                    lastBlockCreatedAt = now;
                     block.Clear();
                 }
 
