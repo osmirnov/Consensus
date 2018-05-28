@@ -61,7 +61,7 @@ namespace Consensus.FastBFT
             var replicaIds = Enumerable.Range(0, replicasCount).ToArray();
 
             var workingReplicaIds = replicaIds
-                .OrderBy(r => rnd.Next(replicaIds.Length))
+                //.OrderBy(r => rnd.Next(replicaIds.Length))
                 .Take(replicaIds.Length * 2 / 3)
                 .ToArray();
 

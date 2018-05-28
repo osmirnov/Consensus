@@ -12,7 +12,7 @@ namespace Consensus.FastBFT.Handlers
             ViewChangeMessage message,
             Replica replica,
             Replica[] activeReplicas,
-            ConcurrentDictionary<byte[], int> viewChangesCount,
+            ConcurrentDictionary<int, int> viewChangesCount,
             byte[] signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
             string encryptedViewKey
         )
@@ -34,13 +34,13 @@ namespace Consensus.FastBFT.Handlers
                 return;
             }
 
-            viewChangesCount.AddOrUpdate(buffer, 0, (_, count) => count + 1);
+            viewChangesCount.AddOrUpdate(buffer.Sum(v => v), 1, (_, count) => count + 1);
 
             var maxViewChangeCount = viewChangesCount
                 .OrderByDescending(vchc => vchc.Value)
                 .FirstOrDefault();
 
-            if (maxViewChangeCount.Key == null || maxViewChangeCount.Value != activeReplicas.Length - 1)
+            if (maxViewChangeCount.Key == 0 || maxViewChangeCount.Value < activeReplicas.Length - 1)
             {
                 return;
             }

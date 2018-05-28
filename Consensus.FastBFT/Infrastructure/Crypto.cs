@@ -45,7 +45,7 @@ namespace Consensus.FastBFT.Infrastructure
 
             if (signedBuffer[keyLength] != 0xff) throw new Exception("Invalid signature");
 
-            buffer = signedBuffer.Skip(keyLength).ToArray();
+            buffer = signedBuffer.Skip(keyLength + 1).ToArray();
 
             return true;
         }

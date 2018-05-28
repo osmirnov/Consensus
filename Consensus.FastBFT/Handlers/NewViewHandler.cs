@@ -23,7 +23,7 @@ namespace Consensus.FastBFT.Handlers
             var aheadBlocksOrTree = (message.AheadBlocks.LastOrDefault() ?? new int[0]).Sum() | message.ReplicaTree.Sum();
             var signedByReplicaAheadBlocksOrTreeHashAndCounterViewNumber = replica.Tee.RequestCounter(Crypto.GetHash(aheadBlocksOrTree.ToString()));
 
-            foreach (var activeReplica in activeReplicas)
+            foreach (var activeReplica in activeReplicas.Where(r => r.Id != replica.Id))
             {
                 activeReplica.SendMessage(new ViewChangeMessage
                 {

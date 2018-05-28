@@ -33,7 +33,7 @@ namespace Consensus.FastBFT.Replicas
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
                 var signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber = new byte[0];
                 var encryptedViewKey = string.Empty;
-                var viewChangesCount = new ConcurrentDictionary<byte[], int>();
+                var viewChangesCount = new ConcurrentDictionary<int, int>();
 
                 Log("Running...");
 
@@ -41,6 +41,39 @@ namespace Consensus.FastBFT.Replicas
                 {
                     var message = ReceiveMessage();
                     if (message == null)
+                    {
+                        Thread.Sleep(1000);
+                        continue;
+                    }
+
+                    var newViewMessage = message as NewViewMessage;
+                    if (newViewMessage != null)
+                    {
+                        Log("Received NewViewMessage");
+
+                        NewViewHandler.Handle(
+                            newViewMessage,
+                            this,
+                            activeReplicas,
+                            out signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
+                            out encryptedViewKey);
+                    }
+
+                    var viewChangeMessage = message as ViewChangeMessage;
+                    if (viewChangeMessage != null)
+                    {
+                        Log("Received ViewChangeMessage (ReplicaId: {0})", viewChangeMessage.ReplicaId);
+
+                        ViewChangeHandler.Handle(
+                            viewChangeMessage,
+                            this,
+                            activeReplicas,
+                            viewChangesCount,
+                            signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
+                            encryptedViewKey);
+                    }
+
+                    if (Tee.ViewKey == 0)
                     {
                         Thread.Sleep(1000);
                         continue;
@@ -91,38 +124,15 @@ namespace Consensus.FastBFT.Replicas
                             replicaSecret,
                             secretShareMessageTokenSources);
                     }
-
-                    var newViewMessage = message as NewViewMessage;
-                    if (newViewMessage != null)
-                    {
-                        NewViewHandler.Handle(
-                            newViewMessage,
-                            this,
-                            activeReplicas,
-                            out signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
-                            out encryptedViewKey);
-                    }
-
-                    var viewChangeMessage = message as ViewChangeMessage;
-                    if (viewChangeMessage != null)
-                    {
-                        ViewChangeHandler.Handle(
-                            viewChangeMessage,
-                            this,
-                            activeReplicas,
-                            viewChangesCount,
-                            signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
-                            encryptedViewKey);
-                    }
                 }
 
                 Log("Stopped.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
-        private void Log(string message)
+        private void Log(string message, params object[] args)
         {
-            Console.WriteLine($"Replica #{Id}: {message}");
+            Console.WriteLine($"Replica #{Id}: {string.Format(message, args)}");
         }
     }
 }
