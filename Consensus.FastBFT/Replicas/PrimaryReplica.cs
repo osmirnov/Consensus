@@ -13,7 +13,7 @@ namespace Consensus.FastBFT.Replicas
 {
     public class PrimaryReplica : ReplicaBase
     {
-        private List<int[]> blockchain = new List<int[]>();
+        private readonly List<int[]> blockchain = new List<int[]>();
 
         public PrimaryTee Tee { get; }
 
@@ -34,13 +34,13 @@ namespace Consensus.FastBFT.Replicas
 
             var replicaTree = ReplicaTopology.GetReplicaTree(this);
             var aheadBlocksOrTree = (aheadBlocks.LastOrDefault() ?? new int[0]).Sum() | replicaTree.Sum();
-            var signedHashAndCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(aheadBlocksOrTree.ToString()));
+            var signedAheadBlocksOrTreeHashAndCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(aheadBlocksOrTree.ToString()));
             var encryptedViewKeys = Tee.BePrimary(activeReplicas);
 
             SyncReplicas(
                 aheadBlocks,
                 replicaTree,
-                signedHashAndCounterViewNumber,
+                signedAheadBlocksOrTreeHashAndCounterViewNumber,
                 encryptedViewKeys,
                 activeReplicas);
 
@@ -157,21 +157,17 @@ namespace Consensus.FastBFT.Replicas
         private static void SyncReplicas(
             IEnumerable<int[]> aheadBlocks,
             IEnumerable<int> replicaTree,
-            byte[] signedHashAndCounterViewNumber,
+            byte[] signedAheadBlocksOrTreeHashAndCounterViewNumber,
             IReadOnlyDictionary<int, string> encryptedViewKeys,
             IEnumerable<ReplicaBase> activeReplicas)
         {
-            // we sync tee counter and the current view
-            // we assume it is done in parallel and this network delay represents all of them
-            Network.EmulateLatency();
-
             foreach (var activeReplica in activeReplicas)
             {
                 activeReplica.SendMessage(new NewViewMessage
                 {
                     AheadBlocks = aheadBlocks,
                     ReplicaTree = replicaTree,
-                    SignedHashAndCounterViewNumber = signedHashAndCounterViewNumber,
+                    SignedAheadBlocksOrTreeHashAndCounterViewNumber = signedAheadBlocksOrTreeHashAndCounterViewNumber,
                     EncryptedViewKey = encryptedViewKeys[activeReplica.Id]
                 });
             }

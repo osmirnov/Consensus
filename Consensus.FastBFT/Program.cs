@@ -91,7 +91,7 @@ namespace Consensus.FastBFT
 
             foreach (var secondaryReplica in secondaryReplicas)
             {
-                secondaryReplica.Run(cancellationToken);
+                secondaryReplica.Run(secondaryReplicas, cancellationToken);
             }
 
 

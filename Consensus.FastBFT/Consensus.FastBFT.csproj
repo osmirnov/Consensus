@@ -52,6 +52,8 @@
     <Compile Include="Handlers\PrepareHandler.cs" />
     <Compile Include="Handlers\PreprocessingHandler.cs" />
     <Compile Include="Handlers\TransactionHandler.cs" />
+    <Compile Include="Handlers\ViewChangeHandler.cs" />
+    <Compile Include="Messages\ViewChangeMessage.cs" />
     <Compile Include="Infrastructure\Crypto.cs" />
     <Compile Include="Infrastructure\Network.cs" />
     <Compile Include="Infrastructure\ReplicaTopology.cs" />

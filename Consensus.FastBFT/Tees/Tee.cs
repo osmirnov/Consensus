@@ -26,7 +26,6 @@ namespace Consensus.FastBFT.Tees
         public void UpdateView(
             string primaryReplicaPublicKey,
             byte[] signedByPrimaryReplicaHashAndCounterViewNumber,
-            string replicaPrivateKey,
             string encryptedViewKey)
         {
             uint hash;
@@ -44,7 +43,7 @@ namespace Consensus.FastBFT.Tees
 
             LatestCounter = 0;
             ViewNumber++;
-            if (IsActive) ViewKey = byte.Parse(Crypto.Decrypt(replicaPrivateKey, encryptedViewKey));
+            if (IsActive) ViewKey = byte.Parse(Crypto.Decrypt(privateKey, encryptedViewKey));
         }
 
         // used by active replicas
@@ -174,15 +173,15 @@ namespace Consensus.FastBFT.Tees
         //}
 
         private void GetHashAndCounterViewNumber(
-            string primaryReplicaPublicKey,
-            byte[] signedByPrimaryReplicaHashAndCounterViewNumber,
+            string replicaPublicKey,
+            byte[] signedByReplicaHashAndCounterViewNumber,
             out uint hash,
             out uint counter,
             out uint viewNumber
         )
         {
             byte[] buffer;
-            if (Crypto.Verify(primaryReplicaPublicKey, signedByPrimaryReplicaHashAndCounterViewNumber, out buffer) == false) throw new Exception("Invalid signature");
+            if (Crypto.Verify(replicaPublicKey, signedByReplicaHashAndCounterViewNumber, out buffer) == false) throw new Exception("Invalid signature");
 
             using (var memory = new MemoryStream(buffer))
             using (var reader = new BinaryReader(memory))

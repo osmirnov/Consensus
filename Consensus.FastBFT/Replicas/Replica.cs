@@ -19,7 +19,7 @@ namespace Consensus.FastBFT.Replicas
             Tee = new Tee(PrivateKey, PublicKey) { IsActive = isActive };
         }
 
-        public void Run(CancellationToken cancellationToken)
+        public void Run(Replica[] activeReplicas, CancellationToken cancellationToken)
         {
             // process messages
             Task.Factory.StartNew(() =>
@@ -31,7 +31,9 @@ namespace Consensus.FastBFT.Replicas
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
-                var signedHashAndCounterViewNumber = new byte[0];
+                var signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber = new byte[0];
+                var encryptedViewKey = string.Empty;
+                var viewChangesCount = new ConcurrentDictionary<byte[], int>();
 
                 Log("Running...");
 
@@ -96,7 +98,21 @@ namespace Consensus.FastBFT.Replicas
                         NewViewHandler.Handle(
                             newViewMessage,
                             this,
-                            out signedHashAndCounterViewNumber);
+                            activeReplicas,
+                            out signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
+                            out encryptedViewKey);
+                    }
+
+                    var viewChangeMessage = message as ViewChangeMessage;
+                    if (viewChangeMessage != null)
+                    {
+                        ViewChangeHandler.Handle(
+                            viewChangeMessage,
+                            this,
+                            activeReplicas,
+                            viewChangesCount,
+                            signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
+                            encryptedViewKey);
                     }
                 }
 
