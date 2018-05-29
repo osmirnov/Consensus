@@ -20,7 +20,7 @@ namespace Consensus.FastBFT.Infrastructure
 
         public static string Decrypt(string privateKey, string encryptedStr)
         {
-            return encryptedStr.Substring(encryptedStr.IndexOf(privateKey), privateKey.Length);
+            return encryptedStr.Substring(encryptedStr.IndexOf(privateKey) + privateKey.Length);
         }
 
         public static byte[] DecryptAuth(byte key, byte[] encryptedBuffer)

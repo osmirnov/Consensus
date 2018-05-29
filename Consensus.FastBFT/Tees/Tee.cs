@@ -93,8 +93,6 @@ namespace Consensus.FastBFT.Tees
 
         public byte[] RequestCounter(uint hash)
         {
-            LatestCounter++;
-
             byte[] buffer;
 
             using (var memory = new MemoryStream())

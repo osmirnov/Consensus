@@ -170,13 +170,16 @@ namespace Consensus.FastBFT.Replicas
                     EncryptedViewKey = encryptedViewKeys[activeReplica.Id]
                 });
             }
+
+            // we will wait for 1 second to make sure all replicas in sync
+            Thread.Sleep(1000);
         }
 
         private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas)
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
-            var signedSecretHashAndEncryptedReplicaSecrets = ((PrimaryTee)Tee).Preprocessing(1).First();
+            var signedSecretHashAndEncryptedReplicaSecrets = Tee.Preprocessing(1).First();
             var encryptedReplicaSecrets = signedSecretHashAndEncryptedReplicaSecrets.Value;
 
             // we distribute secret shares among active replicas
