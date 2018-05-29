@@ -1,11 +1,9 @@
-﻿using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
-using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Handlers
 {
@@ -13,26 +11,23 @@ namespace Consensus.FastBFT.Handlers
     {
         public static void Handle(
             PrepareMessage message,
-            Tee tee,
-            byte[] replicaSecret,
-            Dictionary<int, uint> childSecretHashes,
             Replica replica,
+            byte[] replicaSecret,
             out int[] block,
             out string secretShare,
+            out Dictionary<int, uint> childSecretHashes,
             out uint secretHash,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
             block = message.Block;
             var requestCounterViewNumber = message.RequestCounterViewNumber;
 
-            Dictionary<int, uint> childrenSecretHashes;
-
-            tee.VerifyCounter(
+            replica.Tee.VerifyCounter(
                 replica.PrimaryReplica.PublicKey,
                 requestCounterViewNumber,
                 replicaSecret,
                 out secretShare,
-                out childrenSecretHashes,
+                out childSecretHashes,
                 out secretHash);
 
             if (replica.ChildReplicas.Any())

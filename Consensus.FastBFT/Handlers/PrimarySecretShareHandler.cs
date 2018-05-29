@@ -19,13 +19,10 @@ namespace Consensus.FastBFT.Handlers
             ref bool isCommitted,
             string secret,
             Dictionary<int, uint> childSecretHashes,
-            Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources,
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
             var childReplicaId = message.ReplicaId;
             var childSecretShare = message.SecreShare;
-
-            secretShareMessageTokenSources[childReplicaId].Cancel();
 
             if (Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {

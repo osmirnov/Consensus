@@ -151,7 +151,6 @@ namespace Consensus.FastBFT.Tees
             using (var memory = new MemoryStream())
             using (var writer = new BinaryWriter(memory))
             {
-                writer.Write(secretShare.Length);
                 writer.Write(secretShare);
                 writer.Write(counter);
                 writer.Write(ViewNumber);

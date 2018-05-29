@@ -113,7 +113,6 @@ namespace Consensus.FastBFT.Replicas
                 var replicaSecretShare = string.Empty;
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
-                var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
 
                 Log("Running message exchange...");
 
@@ -137,7 +136,6 @@ namespace Consensus.FastBFT.Replicas
                             ref isCommitted,
                             replicaSecretShare,
                             childSecretHashes,
-                            secretShareMessageTokenSources,
                             verifiedChildShareSecrets);
 
                         if (isCommitted)

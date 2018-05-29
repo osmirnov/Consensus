@@ -37,7 +37,7 @@ namespace Consensus.FastBFT
 
                     Log($"The transaction #{transaction} was sent to the primary replica.");
 
-                    await Task.Delay(100);
+                    await Task.Delay(10);
                 }
 
                 Log("Stopped.");

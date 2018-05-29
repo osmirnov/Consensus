@@ -84,7 +84,7 @@ namespace Consensus.FastBFT.Tees
 
                 secretHash = reader.ReadUInt32();
 
-                if (counter != replicaCounter || viewNumber == replicaViewNumber) throw new Exception("Invalid counter value");
+                if (counter != replicaCounter || viewNumber != replicaViewNumber) throw new Exception("Invalid counter value");
                 if (counter != LatestCounter + 1) throw new Exception("Invalid counter value");
 
                 LatestCounter++;

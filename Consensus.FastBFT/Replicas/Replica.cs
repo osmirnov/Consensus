@@ -90,12 +90,11 @@ namespace Consensus.FastBFT.Replicas
                     {
                         PrepareHandler.Handle(
                             prepareMessage,
-                            Tee,
-                            replicaSecret,
-                            childSecretHashes,
                             this,
+                            replicaSecret,
                             out block,
                             out replicaSecretShare,
+                            out childSecretHashes,
                             out secretHash,
                             secretShareMessageTokenSources
                         );
