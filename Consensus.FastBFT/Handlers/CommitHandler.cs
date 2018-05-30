@@ -9,7 +9,7 @@ using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Handlers
 {
-    public class CommitHandler
+    public class CommitHandler : Handler
     {
         public static void Handle(
             CommitMessage message,
@@ -69,6 +69,10 @@ namespace Consensus.FastBFT.Handlers
                                 SecreShare = nextSecretShare
                             });
                     }
+                }
+                else
+                {
+                    Log("Send RequestViewChangeMessage to all active replicas.");
                 }
             }
         }

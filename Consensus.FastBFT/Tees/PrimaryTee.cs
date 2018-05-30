@@ -169,5 +169,25 @@ namespace Consensus.FastBFT.Tees
 
             encryptedReplicaSecrets.Add(replica.Id, Crypto.EncryptAuth(replicaViewKeys[replica.Id], buffer));
         }
+
+        public void GetHashAndCounterViewNumber(
+            string replicaPublicKey,
+            byte[] signedByReplicaHashAndCounterViewNumber,
+            out uint hash,
+            out uint counter,
+            out uint viewNumber
+        )
+        {
+            byte[] buffer;
+            if (Crypto.Verify(replicaPublicKey, signedByReplicaHashAndCounterViewNumber, out buffer) == false) throw new Exception("Invalid signature");
+
+            using (var memory = new MemoryStream(buffer))
+            using (var reader = new BinaryReader(memory))
+            {
+                hash = reader.ReadUInt32();
+                counter = reader.ReadUInt32();
+                viewNumber = reader.ReadUInt32();
+            }
+        }
     }
 }

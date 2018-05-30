@@ -6,7 +6,7 @@ using Consensus.FastBFT.Messages;
 
 namespace Consensus.FastBFT.Handlers
 {
-    public class TransactionHandler
+    public class TransactionHandler : Handler
     {
         public const int MinTransactionsCountInBlock = 10;
 
@@ -23,7 +23,7 @@ namespace Consensus.FastBFT.Handlers
             }
 
             var now = DateTime.Now;
-            if (block.Count > MinTransactionsCountInBlock)
+            if (block.Count >= MinTransactionsCountInBlock)
             {
                 var blockCopy = block.ToArray();
 
@@ -34,6 +34,8 @@ namespace Consensus.FastBFT.Handlers
 
                 // publish block to start working on consensus
                 blockExchange.Enqueue(blockCopy);
+
+                // Log($"New block arrived for consensus (tx count: {blockCopy.Length})");
             }
         }
     }

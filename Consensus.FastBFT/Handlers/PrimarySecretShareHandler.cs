@@ -1,6 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
@@ -17,7 +18,7 @@ namespace Consensus.FastBFT.Handlers
             IEnumerable<ReplicaBase> activeRelicas,
             int[] block,
             ref bool isCommitted,
-            string secret,
+            byte[] signedSecretHashAndCounterViewNumber,
             Dictionary<int, uint> childSecretHashes,
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
@@ -51,20 +52,33 @@ namespace Consensus.FastBFT.Handlers
                 .Select(x => x.SecretShare)
                 .ToList();
 
-            if (secret != string.Join(string.Empty, verifiedSecretShares))
+            var secret = string.Join(string.Empty, verifiedSecretShares);
+
+            uint secretHash;
+            uint counter;
+            uint viewNumber;
+
+            primaryReplica.Tee.GetHashAndCounterViewNumber(
+                primaryReplica.PublicKey,
+                signedSecretHashAndCounterViewNumber,
+                out secretHash,
+                out counter,
+                out viewNumber);
+
+            if (Crypto.GetHash(secret) != secretHash)
             {
                 return;
             }
 
+            var request = string.Join(string.Empty, block);
+            var commitResult = block.Sum();
+            var commitResultHash = Crypto.GetHash(request + commitResult);
+
+            var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
+
             if (!isCommitted)
             {
-                Log("All ready to commit");
-
-                var request = string.Join(string.Empty, block);
-                var commitResult = block.Sum();
-                var commitResultHash = Crypto.GetHash(request + commitResult);
-
-                var signedCommitResultHashCounterViewNumber = ((PrimaryTee)primaryReplica.Tee).RequestCounter(commitResultHash);
+                Log("All ready to commit.");
 
                 Network.EmulateLatency();
 
@@ -77,10 +91,8 @@ namespace Consensus.FastBFT.Handlers
                         CommitResultHashCounterViewNumber = signedCommitResultHashCounterViewNumber
                     });
                 }
-            }
-            else
-            {
-                
+
+                isCommitted = true;
             }
         }
     }

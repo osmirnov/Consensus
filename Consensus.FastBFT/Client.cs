@@ -30,12 +30,12 @@ namespace Consensus.FastBFT
                 {
                     var transaction = GenerateTransaction();
 
-                    Log($"The transaction #{transaction} was generated.");
+                    // Log($"The transaction #{transaction} was generated.");
 
                     // a new transaction was generated -> send this to primary replica
                     SendTransactionToPrimaryReplica(primaryReplica, transaction);
 
-                    Log($"The transaction #{transaction} was sent to the primary replica.");
+                    // Log($"The transaction #{transaction} was sent to the primary replica.");
 
                     await Task.Delay(10);
                 }

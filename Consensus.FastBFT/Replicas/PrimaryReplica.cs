@@ -44,6 +44,8 @@ namespace Consensus.FastBFT.Replicas
                 encryptedViewKeys,
                 activeReplicas);
 
+            Log("All replicas in sync with latest counter and view number");
+
             // process transactions
             var blockExchange = new ConcurrentQueue<int[]>();
 
@@ -73,6 +75,7 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             var isSecretDistributed = false;
+            var signedSecretHashAndCounterViewNumber = new byte[0];
             var consensusBlock = default(int[]);
 
             // process blocks
@@ -84,8 +87,10 @@ namespace Consensus.FastBFT.Replicas
                 {
                     if (!isSecretDistributed)
                     {
-                        DistributeSecret(activeReplicas);
+                        DistributeSecret(activeReplicas, out signedSecretHashAndCounterViewNumber);
                         isSecretDistributed = true;
+
+                        Log("All secret shares are distributed among replicas");
                     }
 
                     if (consensusBlock == null)
@@ -97,6 +102,7 @@ namespace Consensus.FastBFT.Replicas
                         }
 
                         InitiateConsesusProcess(activeReplicas, consensusBlock);
+                        Log($"The consenus was started on block #{string.Join(string.Empty, consensusBlock)}");
                         continue;
                     }
 
@@ -110,7 +116,6 @@ namespace Consensus.FastBFT.Replicas
             Task.Factory.StartNew(() =>
             {
                 var isCommitted = false;
-                var replicaSecretShare = string.Empty;
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
 
@@ -134,7 +139,7 @@ namespace Consensus.FastBFT.Replicas
                             activeReplicas,
                             consensusBlock,
                             ref isCommitted,
-                            replicaSecretShare,
+                            signedSecretHashAndCounterViewNumber,
                             childSecretHashes,
                             verifiedChildShareSecrets);
 
@@ -142,7 +147,7 @@ namespace Consensus.FastBFT.Replicas
                         {
                             blockchain.Add(consensusBlock);
                             consensusBlock = null;
-                            Log($"The consensus reached on block #{string.Join(string.Empty, consensusBlock)}");
+                            Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}");
                         }
                     }
                 }
@@ -173,11 +178,12 @@ namespace Consensus.FastBFT.Replicas
             Thread.Sleep(1000);
         }
 
-        private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas)
+        private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas, out byte[] signedSecretHashAndCounterViewNumber)
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret 
             var signedSecretHashAndEncryptedReplicaSecrets = Tee.Preprocessing(1).First();
+            signedSecretHashAndCounterViewNumber = signedSecretHashAndEncryptedReplicaSecrets.Key;
             var encryptedReplicaSecrets = signedSecretHashAndEncryptedReplicaSecrets.Value;
 
             // we distribute secret shares among active replicas
@@ -200,7 +206,7 @@ namespace Consensus.FastBFT.Replicas
         {
             // signed block request
             var request = string.Join(string.Empty, block);
-            var signedRequestCounterViewNumber = ((PrimaryTee)Tee).RequestCounter(Crypto.GetHash(request));
+            var signedRequestCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(request));
 
             // we start preparation for request handling on active replicas
             // we assume it is done in parallel and this network delay represents all of them
