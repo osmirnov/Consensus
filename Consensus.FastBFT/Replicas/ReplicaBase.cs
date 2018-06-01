@@ -12,6 +12,8 @@ namespace Consensus.FastBFT.Replicas
 
         protected readonly string PrivateKey;
 
+        protected readonly List<int[]> Blockchain = new List<int[]>();
+
         public int Id { get; }
         public ReplicaBase ParentReplica { get; set; }
         public IList<ReplicaBase> ChildReplicas { get; } = new List<ReplicaBase>(2);

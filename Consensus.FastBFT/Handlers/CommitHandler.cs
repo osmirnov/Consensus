@@ -16,13 +16,14 @@ namespace Consensus.FastBFT.Handlers
             Replica replica,
             uint secretHash,
             int[] block,
+            int nextBlockIndex,
             byte[] encryptedReplicaSecret,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
             if (Crypto.GetHash(message.Secret) == secretHash)
             {
                 // perform the same op as a primary replica
-                var commitResult = block.Sum();
+                var commitResult = nextBlockIndex;
 
                 if (message.CommitResult == commitResult)
                 {

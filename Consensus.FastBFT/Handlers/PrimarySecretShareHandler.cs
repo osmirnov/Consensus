@@ -16,6 +16,7 @@ namespace Consensus.FastBFT.Handlers
             int[] block,
             int nextBlockIndex,
             ref bool isCommitted,
+            ref bool hasConsensus,
             byte[] signedSecretHashAndCounterViewNumber,
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
@@ -58,14 +59,14 @@ namespace Consensus.FastBFT.Handlers
                 return;
             }
 
-            var request = string.Join(string.Empty, block);
-            var commitResult = nextBlockIndex;
-            var commitResultHash = Crypto.GetHash(request) | (uint)nextBlockIndex;
-
-            var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
-
             if (!isCommitted)
             {
+                var request = string.Join(string.Empty, block);
+                var commitResult = nextBlockIndex;
+                var commitResultHash = Crypto.GetHash(request) | (uint)nextBlockIndex;
+
+                var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
+
                 Log("All ready to commit.");
 
                 Network.EmulateLatency();
@@ -81,6 +82,10 @@ namespace Consensus.FastBFT.Handlers
                 }
 
                 isCommitted = true;
+            }
+            else
+            {
+                hasConsensus = true;
             }
         }
     }

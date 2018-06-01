@@ -13,8 +13,6 @@ namespace Consensus.FastBFT.Replicas
 {
     public class PrimaryReplica : ReplicaBase
     {
-        private readonly List<int[]> blockchain = new List<int[]>();
-
         public PrimaryTee Tee { get; }
 
         public PrimaryReplica(int id) : base(id)
@@ -117,6 +115,7 @@ namespace Consensus.FastBFT.Replicas
             Task.Factory.StartNew(() =>
             {
                 var isCommitted = false;
+                var hasConsensus = false;
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
 
                 Log("Running message exchange...");
@@ -140,15 +139,21 @@ namespace Consensus.FastBFT.Replicas
                             this,
                             activeReplicas,
                             consensusBlock,
-                            blockchain.Count,
+                            Blockchain.Count,
                             ref isCommitted,
+                            ref hasConsensus,
                             signedSecretHashAndCounterViewNumber,
                             verifiedChildShareSecrets);
 
-                        if (isCommitted)
+                        if (hasConsensus)
                         {
-                            blockchain.Add(consensusBlock);
+                            Blockchain.Add(consensusBlock);
+
                             consensusBlock = null;
+                            isCommitted = false;
+                            hasConsensus = false;
+                            verifiedChildShareSecrets.Clear();
+
                             Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}");
                         }
 

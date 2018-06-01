@@ -128,6 +128,7 @@ namespace Consensus.FastBFT.Replicas
                             this,
                             secretHash,
                             block,
+                            Blockchain.Count,
                             replicaSecret,
                             secretShareMessageTokenSources);
                     }
