@@ -19,7 +19,7 @@ namespace Consensus.FastBFT.Handlers
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
             var childReplicaId = message.ReplicaId;
-            var childSecretShare = message.SecreShare;
+            var childSecretShare = message.ReplicaSecretShares[message.ReplicaId];
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
 
@@ -48,19 +48,15 @@ namespace Consensus.FastBFT.Handlers
                 return;
             }
 
-            var verifiedSecretShares = verifiedChildShareSecrets
-                .Select(x => new { ReplicaId = x.Key, SecretShare = x.Value })
-                .OrderBy(x => x.ReplicaId)
-                .Select(x => x.SecretShare)
-                .ToList();
+            var verifiedSecretShares = verifiedChildShareSecrets;
 
-            verifiedSecretShares.Insert(0, replicaSecretShare);
+            verifiedSecretShares.TryAdd(replica.Id, replicaSecretShare);
 
             replica.ParentReplica.SendMessage(
                 new SecretShareMessage
                 {
                     ReplicaId = replica.Id,
-                    SecreShare = string.Join(string.Empty, verifiedSecretShares)
+                    ReplicaSecretShares = verifiedSecretShares.ToDictionary(kv => kv.Key, kv => kv.Value)
                 });
         }
     }

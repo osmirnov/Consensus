@@ -36,5 +36,12 @@ namespace Consensus.FastBFT.Replicas
 
             return messageBus.TryDequeue(out message) ? message : null;
         }
+
+        public Message PeekMessage()
+        {
+            Message message;
+
+            return messageBus.TryPeek(out message) ? message : null;
+        }
     }
 }

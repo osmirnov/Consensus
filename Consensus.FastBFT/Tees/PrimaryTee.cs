@@ -60,7 +60,7 @@ namespace Consensus.FastBFT.Tees
                 var secret = Guid.NewGuid().ToString();
                 var secretHash = Crypto.GetHash(secret + counter + ViewNumber);
                 var activeReplicasCount = activeReplicas.Count();
-                var secretShareLength = secret.Length / activeReplicasCount;
+                var secretShareLength = (secret.Length / activeReplicasCount) + 1;
                 var secretShares = activeReplicas
                     .ToDictionary(
                         r => r.Id,
@@ -68,7 +68,7 @@ namespace Consensus.FastBFT.Tees
                         {
                             var secretShare = secret.Substring(0, Math.Min(secretShareLength, secret.Length));
 
-                            secret = secret.Substring(secretShare.Length - 1);
+                            secret = secret.Substring(secretShare.Length);
 
                             return secretShare;
                         });

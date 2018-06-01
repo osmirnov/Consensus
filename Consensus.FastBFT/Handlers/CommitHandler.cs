@@ -66,7 +66,7 @@ namespace Consensus.FastBFT.Handlers
                             new SecretShareMessage
                             {
                                 ReplicaId = replica.ParentReplica.Id,
-                                SecreShare = nextSecretShare
+                                ReplicaSecretShares = new Dictionary<int, string>() { { replica.ParentReplica.Id, nextSecretShare } }
                             });
                     }
                 }

@@ -1,12 +1,9 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
-using Consensus.FastBFT.Tees;
 
 namespace Consensus.FastBFT.Handlers
 {
@@ -17,31 +14,22 @@ namespace Consensus.FastBFT.Handlers
             PrimaryReplica primaryReplica,
             IEnumerable<ReplicaBase> activeRelicas,
             int[] block,
+            int nextBlockIndex,
             ref bool isCommitted,
             byte[] signedSecretHashAndCounterViewNumber,
-            Dictionary<int, uint> childSecretHashes,
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
             var childReplicaId = message.ReplicaId;
-            var childSecretShare = message.SecreShare;
+            var childSecretShare = message.ReplicaSecretShares;
 
-            if (Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            foreach (var childReplicaShare in message.ReplicaSecretShares)
             {
-                return;
-            }
-
-            if (verifiedChildShareSecrets.TryAdd(childReplicaId, childSecretShare) == false)
-            {
-                return;
-            }
-
-            if (verifiedChildShareSecrets.Count != primaryReplica.ChildReplicas.Count)
-            {
-                return;
+                // TODO: hashes of primary children should be checked as well
+                verifiedChildShareSecrets.TryAdd(childReplicaShare.Key, childReplicaShare.Value);
             }
 
             if (verifiedChildShareSecrets.Keys.OrderBy(_ => _)
-                    .SequenceEqual(primaryReplica.ChildReplicas.Select(r => r.Id).OrderBy(_ => _)) == false)
+                    .SequenceEqual(activeRelicas.Select(r => r.Id).OrderBy(_ => _)) == false)
             {
                 return;
             }
@@ -65,14 +53,14 @@ namespace Consensus.FastBFT.Handlers
                 out counter,
                 out viewNumber);
 
-            if (Crypto.GetHash(secret) != secretHash)
+            if (Crypto.GetHash(secret + counter + viewNumber) != secretHash)
             {
                 return;
             }
 
             var request = string.Join(string.Empty, block);
-            var commitResult = block.Sum();
-            var commitResultHash = Crypto.GetHash(request + commitResult);
+            var commitResult = nextBlockIndex;
+            var commitResultHash = Crypto.GetHash(request) | (uint)nextBlockIndex;
 
             var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
 

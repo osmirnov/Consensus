@@ -57,7 +57,7 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    var message = ReceiveMessage();
+                    var message = PeekMessage();
                     if (message == null)
                     {
                         Thread.Sleep(1000);
@@ -68,6 +68,7 @@ namespace Consensus.FastBFT.Replicas
                     if (transactionMessage != null)
                     {
                         TransactionHandler.Handle(transactionMessage, newBlock, blockExchange);
+                        ReceiveMessage();
                     }
                 }
 
@@ -116,14 +117,13 @@ namespace Consensus.FastBFT.Replicas
             Task.Factory.StartNew(() =>
             {
                 var isCommitted = false;
-                var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
 
                 Log("Running message exchange...");
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    var message = ReceiveMessage();
+                    var message = PeekMessage();
                     if (message == null)
                     {
                         Thread.Sleep(1000);
@@ -133,14 +133,16 @@ namespace Consensus.FastBFT.Replicas
                     var secretShareMessage = message as SecretShareMessage;
                     if (secretShareMessage != null)
                     {
+                        Log("Received SecretShareMessage");
+
                         PrimarySecretShareHandler.Handle(
                             secretShareMessage,
                             this,
                             activeReplicas,
                             consensusBlock,
+                            blockchain.Count,
                             ref isCommitted,
                             signedSecretHashAndCounterViewNumber,
-                            childSecretHashes,
                             verifiedChildShareSecrets);
 
                         if (isCommitted)
@@ -149,10 +151,20 @@ namespace Consensus.FastBFT.Replicas
                             consensusBlock = null;
                             Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}");
                         }
+
+                        ReceiveMessage();
+                    }
+
+                    var suspectMessage = message as SuspectMessage;
+                    if (suspectMessage != null)
+                    {
+                        Log("Received SuspectMessage (SourceReplicaId: {0})", suspectMessage.ReplicaId);
+
+                        ReceiveMessage();
                     }
                 }
 
-                Log("Stopped message exchange.");
+                    Log("Stopped message exchange.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
@@ -222,9 +234,9 @@ namespace Consensus.FastBFT.Replicas
             }
         }
 
-        private void Log(string message)
+        private void Log(string message, params object[] args)
         {
-            Console.WriteLine($"Primary Replica #{Id}: {message}");
+            Console.WriteLine($"Primary Replica #{Id}: {string.Format(message, args)}");
         }
     }
 }

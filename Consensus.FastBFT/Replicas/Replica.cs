@@ -62,7 +62,7 @@ namespace Consensus.FastBFT.Replicas
                     var viewChangeMessage = message as ViewChangeMessage;
                     if (viewChangeMessage != null)
                     {
-                        Log("Received ViewChangeMessage (ReplicaId: {0})", viewChangeMessage.ReplicaId);
+                        Log("Received ViewChangeMessage (SourceReplicaId: {0})", viewChangeMessage.ReplicaId);
 
                         ViewChangeHandler.Handle(
                             viewChangeMessage,
@@ -82,12 +82,16 @@ namespace Consensus.FastBFT.Replicas
                     var preprocessingMessage = message as PreprocessingMessage;
                     if (preprocessingMessage != null)
                     {
+                        Log("Received PreprocessingMessage");
+
                         PreprocessingHandler.Handle(preprocessingMessage, out replicaSecret);
                     }
 
                     var prepareMessage = message as PrepareMessage;
                     if (prepareMessage != null)
                     {
+                        Log("Received PrepareMessage");
+
                         PrepareHandler.Handle(
                             prepareMessage,
                             this,
@@ -103,6 +107,8 @@ namespace Consensus.FastBFT.Replicas
                     var secretShareMessage = message as SecretShareMessage;
                     if (secretShareMessage != null)
                     {
+                        Log("Received SecretShareMessage");
+
                         SecretShareHandler.Handle(
                             secretShareMessage,
                             this,
@@ -115,6 +121,8 @@ namespace Consensus.FastBFT.Replicas
                     var commitMessage = message as CommitMessage;
                     if (commitMessage != null)
                     {
+                        Log("Received CommitMessage");
+
                         CommitHandler.Handle(
                             commitMessage,
                             this,

@@ -1,9 +1,11 @@
-﻿namespace Consensus.FastBFT.Messages
+﻿using System.Collections.Generic;
+
+namespace Consensus.FastBFT.Messages
 {
     public class SecretShareMessage : Message
     {
         public int ReplicaId { get; set; }
 
-        public string SecreShare { get; set; }
+        public Dictionary<int, string> ReplicaSecretShares { get; set; }
     }
 }
