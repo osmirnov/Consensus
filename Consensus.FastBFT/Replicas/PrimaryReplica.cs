@@ -74,7 +74,7 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
             var isSecretDistributed = false;
-            var signedSecretHashAndCounterViewNumber = new byte[0];
+            var signedSecretHashesAndCounterViewNumber = new List<byte[]>(0);
             var consensusBlock = default(int[]);
 
             // process blocks
@@ -86,7 +86,7 @@ namespace Consensus.FastBFT.Replicas
                 {
                     if (!isSecretDistributed)
                     {
-                        DistributeSecret(activeReplicas, out signedSecretHashAndCounterViewNumber);
+                        DistributeSecret(activeReplicas, out signedSecretHashesAndCounterViewNumber);
                         isSecretDistributed = true;
 
                         Log("All secret shares are distributed among replicas");
@@ -134,27 +134,32 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received SecretShareMessage");
 
+                        var blockchainLength = Blockchain.Count;
+
                         PrimarySecretShareHandler.Handle(
                             secretShareMessage,
                             this,
                             activeReplicas,
                             consensusBlock,
-                            Blockchain.Count,
+                            Blockchain,
                             ref isCommitted,
                             ref hasConsensus,
-                            signedSecretHashAndCounterViewNumber,
+                            !isCommitted ? signedSecretHashesAndCounterViewNumber.First() : signedSecretHashesAndCounterViewNumber.Last(),
                             verifiedChildShareSecrets);
+
+                        if (isCommitted)
+                        {
+                            Log($"The block #{string.Join(string.Empty, consensusBlock)} was comitted and replicas were notified.");
+                        }
 
                         if (hasConsensus)
                         {
-                            Blockchain.Add(consensusBlock);
-
                             consensusBlock = null;
                             isCommitted = false;
                             hasConsensus = false;
                             verifiedChildShareSecrets.Clear();
 
-                            Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}");
+                            Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}.");
                         }
 
                         ReceiveMessage();
@@ -195,27 +200,34 @@ namespace Consensus.FastBFT.Replicas
             Thread.Sleep(1000);
         }
 
-        private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas, out byte[] signedSecretHashAndCounterViewNumber)
+        private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas, out List<byte[]> signedSecretHashesAndCounterViewNumbers)
         {
             // preprocessing is designed to issue many secrets per request
-            // we assume we have merged transactions in a block to request a single secret 
-            var signedSecretHashAndEncryptedReplicaSecrets = Tee.Preprocessing(1).First();
-            signedSecretHashAndCounterViewNumber = signedSecretHashAndEncryptedReplicaSecrets.Key;
-            var encryptedReplicaSecrets = signedSecretHashAndEncryptedReplicaSecrets.Value;
+            // we assume we have merged transactions in a block to request a single secret
+            // and also we need an extra one for reply phase 
+            var signedSecretHashesAndEncryptedReplicaSecrets = Tee.Preprocessing(2);
+            signedSecretHashesAndCounterViewNumbers = signedSecretHashesAndEncryptedReplicaSecrets.Select(x => x.Key).ToList();
+            var allEncryptedReplicaSecrets = signedSecretHashesAndEncryptedReplicaSecrets.Select(x => x.Value).ToList();
 
-            // we distribute secret shares among active replicas
-            // we assume it is done in parallel and this network delay represents all of them
-            Network.EmulateLatency();
-
-            foreach (var encryptedReplicaSecret in encryptedReplicaSecrets)
+            for (var i = 0; i < allEncryptedReplicaSecrets.Count; i++)
             {
-                var replicaId = encryptedReplicaSecret.Key;
-                var activeReplica = activeReplicas.SingleOrDefault(r => r.Id == replicaId);
+                var encryptedReplicaSecrets = allEncryptedReplicaSecrets[i];
 
-                activeReplica?.SendMessage(new PreprocessingMessage
+                // we distribute secret shares among active replicas
+                // we assume it is done in parallel and this network delay represents all of them
+                Network.EmulateLatency();
+
+                foreach (var encryptedReplicaSecret in encryptedReplicaSecrets)
                 {
-                    ReplicaSecret = encryptedReplicaSecret.Value
-                });
+                    var replicaId = encryptedReplicaSecret.Key;
+                    var activeReplica = activeReplicas.SingleOrDefault(r => r.Id == replicaId);
+
+                    activeReplica?.SendMessage(new PreprocessingMessage
+                    {
+                        ReplicaSecretIndex = i,
+                        ReplicaSecret = encryptedReplicaSecret.Value
+                    });
+                }
             }
         }
 

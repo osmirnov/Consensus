@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Consensus.FastBFT.Messages;
 
 namespace Consensus.FastBFT.Handlers
@@ -7,9 +8,9 @@ namespace Consensus.FastBFT.Handlers
     {
         public static void Handle(
             PreprocessingMessage message,
-            out byte[] replicaSecret)
+            Dictionary<int, byte[]> replicaSecrets)
         {
-            replicaSecret = message.ReplicaSecret;
+            replicaSecrets.Add(message.ReplicaSecretIndex, message.ReplicaSecret);
         }
     }
 }

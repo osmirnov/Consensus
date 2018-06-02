@@ -16,65 +16,69 @@ namespace Consensus.FastBFT.Handlers
             Replica replica,
             uint secretHash,
             int[] block,
-            int nextBlockIndex,
+            ICollection<int[]> blockchain,
             byte[] encryptedReplicaSecret,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
-            if (Crypto.GetHash(message.Secret) == secretHash)
+            if (Crypto.GetHash(message.Secret + replica.Tee.LatestCounter + replica.Tee.ViewNumber) != secretHash)
             {
-                // perform the same op as a primary replica
-                var commitResult = nextBlockIndex;
+                Log("Send RequestViewChangeMessage to all active replicas.");
+                return;
+            }
 
-                if (message.CommitResult == commitResult)
+            // add the same block as a primary replica
+            blockchain.Add(block);
+
+            var commitResult = blockchain.Count;
+
+            if (message.CommitResult != commitResult)
+            {
+                Log("Send RequestViewChangeMessage to all active replicas.");
+                return;
+            }
+
+            string nextSecretShare;
+            Dictionary<int, uint> nextChildrenSecretHashes;
+            uint nextSecretHash;
+
+            replica.Tee.VerifyCounter(
+                replica.PrimaryReplica.PublicKey,
+                message.CommitResultHashCounterViewNumber,
+                encryptedReplicaSecret,
+                out nextSecretShare,
+                out nextChildrenSecretHashes,
+                out nextSecretHash);
+
+            if (replica.ChildReplicas.Any())
+            {
+                foreach (var childReplica in replica.ChildReplicas)
                 {
-                    string nextSecretShare;
-                    Dictionary<int, uint> nextChildrenSecretHashes;
-                    uint nextSecretHash;
+                    var tokenSource = new CancellationTokenSource();
 
-                    replica.Tee.VerifyCounter(
-                        replica.PrimaryReplica.PublicKey,
-                        message.CommitResultHashCounterViewNumber,
-                        encryptedReplicaSecret,
-                        out nextSecretShare,
-                        out nextChildrenSecretHashes,
-                        out nextSecretHash);
-
-                    if (replica.ChildReplicas.Any())
-                    {
-                        foreach (var childReplica in replica.ChildReplicas)
+                    Task.Delay(5000, tokenSource.Token)
+                        .ContinueWith(t =>
                         {
-                            var tokenSource = new CancellationTokenSource();
-
-                            Task.Delay(5000, tokenSource.Token)
-                                .ContinueWith(t =>
-                                {
-                                    if (t.IsCompleted)
-                                    {
-                                        replica.PrimaryReplica.SendMessage(
-                                            new SuspectMessage
-                                            {
-                                                ReplicaId = childReplica.Id
-                                            });
-                                    }
-                                });
-
-                            secretShareMessageTokenSources.Add(childReplica.Id, tokenSource);
-                        }
-                    }
-                    else
-                    {
-                        replica.ParentReplica.SendMessage(
-                            new SecretShareMessage
+                            if (t.IsCompleted)
                             {
-                                ReplicaId = replica.ParentReplica.Id,
-                                ReplicaSecretShares = new Dictionary<int, string>() { { replica.ParentReplica.Id, nextSecretShare } }
-                            });
-                    }
+                                replica.PrimaryReplica.SendMessage(
+                                    new SuspectMessage
+                                    {
+                                        ReplicaId = childReplica.Id
+                                    });
+                            }
+                        });
+
+                    secretShareMessageTokenSources.Add(childReplica.Id, tokenSource);
                 }
-                else
-                {
-                    Log("Send RequestViewChangeMessage to all active replicas.");
-                }
+            }
+            else
+            {
+                replica.ParentReplica.SendMessage(
+                    new SecretShareMessage
+                    {
+                        ReplicaId = replica.ParentReplica.Id,
+                        ReplicaSecretShares = new Dictionary<int, string>() { { replica.ParentReplica.Id, nextSecretShare } }
+                    });
             }
         }
     }

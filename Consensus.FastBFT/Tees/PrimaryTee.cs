@@ -49,9 +49,9 @@ namespace Consensus.FastBFT.Tees
         }
 
         // primary replica
-        public IDictionary<byte[], IDictionary<int, byte[]>> Preprocessing(int counterValuesCount)
+        public IList<KeyValuePair<byte[], IDictionary<int, byte[]>>> Preprocessing(int counterValuesCount)
         {
-            var result = new Dictionary<byte[], IDictionary<int, byte[]>>(counterValuesCount - 1);
+            var result = new List<KeyValuePair<byte[], IDictionary<int, byte[]>>>(counterValuesCount - 1);
 
             for (uint i = 1; i <= counterValuesCount; i++)
             {
@@ -100,7 +100,7 @@ namespace Consensus.FastBFT.Tees
 
                 var signedSecretHash = Crypto.Sign(privateKey, buffer);
 
-                result.Add(signedSecretHash, encryptedReplicaSecrets);
+                result.Add(new KeyValuePair<byte[], IDictionary<int, byte[]>>(signedSecretHash, encryptedReplicaSecrets));
             }
 
             return result;

@@ -24,7 +24,7 @@ namespace Consensus.FastBFT.Replicas
             // process messages
             Task.Factory.StartNew(() =>
             {
-                var replicaSecret = new byte[0];
+                var replicaSecrets = new Dictionary<int, byte[]>(2);
                 var block = new int[0];
                 var replicaSecretShare = string.Empty;
                 var secretHash = default(uint);
@@ -84,7 +84,7 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received PreprocessingMessage");
 
-                        PreprocessingHandler.Handle(preprocessingMessage, out replicaSecret);
+                        PreprocessingHandler.Handle(preprocessingMessage, replicaSecrets);
                     }
 
                     var prepareMessage = message as PrepareMessage;
@@ -95,7 +95,7 @@ namespace Consensus.FastBFT.Replicas
                         PrepareHandler.Handle(
                             prepareMessage,
                             this,
-                            replicaSecret,
+                            replicaSecrets[0],
                             out block,
                             out replicaSecretShare,
                             out childSecretHashes,
@@ -128,8 +128,8 @@ namespace Consensus.FastBFT.Replicas
                             this,
                             secretHash,
                             block,
-                            Blockchain.Count,
-                            replicaSecret,
+                            Blockchain,
+                            replicaSecrets[1],
                             secretShareMessageTokenSources);
                     }
                 }

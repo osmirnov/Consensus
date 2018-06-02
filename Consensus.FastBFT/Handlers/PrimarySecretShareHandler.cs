@@ -14,7 +14,7 @@ namespace Consensus.FastBFT.Handlers
             PrimaryReplica primaryReplica,
             IEnumerable<ReplicaBase> activeRelicas,
             int[] block,
-            int nextBlockIndex,
+            ICollection<int[]> blockchain,
             ref bool isCommitted,
             ref bool hasConsensus,
             byte[] signedSecretHashAndCounterViewNumber,
@@ -61,13 +61,15 @@ namespace Consensus.FastBFT.Handlers
 
             if (!isCommitted)
             {
+                blockchain.Add(block);
+
                 var request = string.Join(string.Empty, block);
-                var commitResult = nextBlockIndex;
-                var commitResultHash = Crypto.GetHash(request) | (uint)nextBlockIndex;
+                var commitResult = blockchain.Count;
+                var commitResultHash = Crypto.GetHash(request) | (uint)commitResult;
 
                 var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
 
-                Log("All ready to commit.");
+                Log("Broadcast a committed block.");
 
                 Network.EmulateLatency();
 
