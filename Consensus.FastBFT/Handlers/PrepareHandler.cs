@@ -2,12 +2,13 @@
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Handlers
 {
-    public class PrepareHandler
+    public class PrepareHandler : Handler
     {
         public static void Handle(
             PrepareMessage message,
@@ -39,8 +40,11 @@ namespace Consensus.FastBFT.Handlers
                     Task.Delay(5000, tokenSource.Token)
                         .ContinueWith(t =>
                         {
-                            if (t.IsCompleted)
+                            if (!t.IsCanceled)
                             {
+                                // we send message about a suspected replica to the primary replica
+                                Network.EmulateLatency();
+
                                 replica.PrimaryReplica.SendMessage(
                                     new SuspectMessage
                                     {
@@ -54,12 +58,17 @@ namespace Consensus.FastBFT.Handlers
             }
             else
             {
+                // we send a message with a secret share to the parent replica
+                Network.EmulateLatency();
+
                 replica.ParentReplica.SendMessage(
                     new SecretShareMessage
                     {
                         ReplicaId = replica.Id,
                         ReplicaSecretShares = new Dictionary<int, string> { { replica.Id, secretShare } }
                     });
+
+                Log(replica, "Send a secret to the parent replica (ParentReplicaId: {0})", replica.ParentReplica.Id);
             }
         }
     }

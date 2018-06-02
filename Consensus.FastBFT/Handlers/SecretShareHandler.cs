@@ -8,7 +8,7 @@ using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Handlers
 {
-    public class SecretShareHandler
+    public class SecretShareHandler : Handler
     {
         public static void Handle(
             SecretShareMessage message,
@@ -22,6 +22,7 @@ namespace Consensus.FastBFT.Handlers
             var childSecretShare = message.ReplicaSecretShares[message.ReplicaId];
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
+            secretShareMessageTokenSources.Remove(childReplicaId);
 
             if (Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
             {
@@ -52,12 +53,17 @@ namespace Consensus.FastBFT.Handlers
 
             verifiedSecretShares.TryAdd(replica.Id, replicaSecretShare);
 
+            // we send a message with a secret share to the parent replica
+            Network.EmulateLatency();
+
             replica.ParentReplica.SendMessage(
                 new SecretShareMessage
                 {
                     ReplicaId = replica.Id,
                     ReplicaSecretShares = verifiedSecretShares.ToDictionary(kv => kv.Key, kv => kv.Value)
                 });
+
+            Log(replica, "Send a secret share to the parent replica (ParentReplicaId: {0})", replica.ParentReplica.Id);
         }
     }
 }

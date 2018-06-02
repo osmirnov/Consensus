@@ -21,9 +21,11 @@ namespace Consensus.FastBFT.Handlers
             ConcurrentDictionary<int, string> verifiedChildShareSecrets)
         {
             var childReplicaId = message.ReplicaId;
-            var childSecretShare = message.ReplicaSecretShares;
+            var childrenSecretShares = message.ReplicaSecretShares;
 
-            foreach (var childReplicaShare in message.ReplicaSecretShares)
+            Log(primaryReplica, "ChildReplicaId: {0}, ChildrenSecretShare: [{1}]", childReplicaId, string.Join(",", childrenSecretShares.Select(ridssh => $"{{{ridssh.Key}:{ridssh.Value}}}")));
+
+            foreach (var childReplicaShare in childrenSecretShares)
             {
                 // TODO: hashes of primary children should be checked as well
                 verifiedChildShareSecrets.TryAdd(childReplicaShare.Key, childReplicaShare.Value);
@@ -61,6 +63,8 @@ namespace Consensus.FastBFT.Handlers
 
             if (!isCommitted)
             {
+                verifiedChildShareSecrets.Clear();
+
                 blockchain.Add(block);
 
                 var request = string.Join(string.Empty, block);
@@ -69,7 +73,7 @@ namespace Consensus.FastBFT.Handlers
 
                 var signedCommitResultHashCounterViewNumber = primaryReplica.Tee.RequestCounter(commitResultHash);
 
-                Log("Broadcast a committed block.");
+                Log(primaryReplica, "Broadcast a committed block.");
 
                 Network.EmulateLatency();
 

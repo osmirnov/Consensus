@@ -18,11 +18,15 @@ namespace Consensus.FastBFT.Handlers
             int[] block,
             ICollection<int[]> blockchain,
             byte[] encryptedReplicaSecret,
+            out string nextSecretShare,
+            out Dictionary<int, uint> nextChildSecretHashes,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources)
         {
             if (Crypto.GetHash(message.Secret + replica.Tee.LatestCounter + replica.Tee.ViewNumber) != secretHash)
             {
-                Log("Send RequestViewChangeMessage to all active replicas.");
+                Log(replica, "Send RequestViewChangeMessage to all active replicas.");
+                nextSecretShare = string.Empty;
+                nextChildSecretHashes = new Dictionary<int, uint>(0);
                 return;
             }
 
@@ -33,12 +37,12 @@ namespace Consensus.FastBFT.Handlers
 
             if (message.CommitResult != commitResult)
             {
-                Log("Send RequestViewChangeMessage to all active replicas.");
+                Log(replica, "Send RequestViewChangeMessage to all active replicas.");
+                nextSecretShare = string.Empty;
+                nextChildSecretHashes = new Dictionary<int, uint>(0);
                 return;
             }
 
-            string nextSecretShare;
-            Dictionary<int, uint> nextChildrenSecretHashes;
             uint nextSecretHash;
 
             replica.Tee.VerifyCounter(
@@ -46,7 +50,7 @@ namespace Consensus.FastBFT.Handlers
                 message.CommitResultHashCounterViewNumber,
                 encryptedReplicaSecret,
                 out nextSecretShare,
-                out nextChildrenSecretHashes,
+                out nextChildSecretHashes,
                 out nextSecretHash);
 
             if (replica.ChildReplicas.Any())
@@ -58,8 +62,11 @@ namespace Consensus.FastBFT.Handlers
                     Task.Delay(5000, tokenSource.Token)
                         .ContinueWith(t =>
                         {
-                            if (t.IsCompleted)
+                            if (!t.IsCanceled)
                             {
+                                // we send message about a suspected replica to the primary replica
+                                Network.EmulateLatency();
+
                                 replica.PrimaryReplica.SendMessage(
                                     new SuspectMessage
                                     {
@@ -73,12 +80,17 @@ namespace Consensus.FastBFT.Handlers
             }
             else
             {
+                // we send a message with a secret share to the parent replica
+                Network.EmulateLatency();
+
                 replica.ParentReplica.SendMessage(
                     new SecretShareMessage
                     {
-                        ReplicaId = replica.ParentReplica.Id,
-                        ReplicaSecretShares = new Dictionary<int, string>() { { replica.ParentReplica.Id, nextSecretShare } }
+                        ReplicaId = replica.Id,
+                        ReplicaSecretShares = new Dictionary<int, string>() { { replica.Id, nextSecretShare } }
                     });
+
+                Log(replica, "Send a secret share to the parent replica (ParentReplicaId: {0})", replica.ParentReplica.Id);
             }
         }
     }

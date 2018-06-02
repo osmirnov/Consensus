@@ -30,6 +30,8 @@ namespace Consensus.FastBFT.Replicas
 
             ReplicaTopology.Discover(this, activeReplicas);
 
+            LogReplicaTopology(this);
+
             var replicaTree = ReplicaTopology.GetReplicaTree(this);
             var aheadBlocksOrTree = (aheadBlocks.LastOrDefault() ?? new int[0]).Sum() | replicaTree.Sum();
             var signedAheadBlocksOrTreeHashAndCounterViewNumber = Tee.RequestCounter(Crypto.GetHash(aheadBlocksOrTree.ToString()));
@@ -132,7 +134,7 @@ namespace Consensus.FastBFT.Replicas
                     var secretShareMessage = message as SecretShareMessage;
                     if (secretShareMessage != null)
                     {
-                        Log("Received SecretShareMessage");
+                        Log("Received SecretShareMessage (SourceReplicaId: {0})", secretShareMessage.ReplicaId);
 
                         var blockchainLength = Blockchain.Count;
 
@@ -149,17 +151,19 @@ namespace Consensus.FastBFT.Replicas
 
                         if (isCommitted)
                         {
-                            Log($"The block #{string.Join(string.Empty, consensusBlock)} was comitted and replicas were notified.");
+                            // hasConsensus = false;
+
+                            // Log($"The block #{string.Join(string.Empty, consensusBlock)} was comitted and replicas were notified.");
                         }
 
                         if (hasConsensus)
                         {
+                            Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}.");
+
                             consensusBlock = null;
                             isCommitted = false;
                             hasConsensus = false;
                             verifiedChildShareSecrets.Clear();
-
-                            Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}.");
                         }
 
                         ReceiveMessage();
@@ -176,6 +180,16 @@ namespace Consensus.FastBFT.Replicas
 
                     Log("Stopped message exchange.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        }
+
+        private void LogReplicaTopology(ReplicaBase replica)
+        {
+            Log("ParentReplicaId: {0}, ChildReplicaIds: [{1}]", replica.Id, string.Join(",", replica.ChildReplicas.Select(r => r.Id)));
+
+            foreach (var childReplica in replica.ChildReplicas)
+            {
+                LogReplicaTopology(childReplica);
+            }
         }
 
         private static void SyncReplicas(

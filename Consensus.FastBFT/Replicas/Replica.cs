@@ -107,7 +107,7 @@ namespace Consensus.FastBFT.Replicas
                     var secretShareMessage = message as SecretShareMessage;
                     if (secretShareMessage != null)
                     {
-                        Log("Received SecretShareMessage");
+                        Log("Received SecretShareMessage (SourceReplicaId: {0})", secretShareMessage.ReplicaId);
 
                         SecretShareHandler.Handle(
                             secretShareMessage,
@@ -123,6 +123,10 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received CommitMessage");
 
+                        childSecretHashes.Clear();
+                        secretShareMessageTokenSources.Clear();
+                        verifiedChildShareSecrets.Clear();
+
                         CommitHandler.Handle(
                             commitMessage,
                             this,
@@ -130,6 +134,8 @@ namespace Consensus.FastBFT.Replicas
                             block,
                             Blockchain,
                             replicaSecrets[1],
+                            out replicaSecretShare,
+                            out childSecretHashes,
                             secretShareMessageTokenSources);
                     }
                 }
