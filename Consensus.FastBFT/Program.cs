@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -12,10 +13,10 @@ namespace Consensus.FastBFT
 {
     internal class Program
     {
-        private const int clientsCount = 1;
-        private const int replicasCount = 50;
-        private const int workingReplicasCount = replicasCount * 2 / 3;
-        private const int activeReplicasCount = workingReplicasCount * 2 / 3;
+        private static int ClientsCount;
+        private static int ActiveReplicasCount;
+        private static int PassiveReplicasCount;
+        private static int FaultyReplicasCount;
 
         private static readonly List<ConsensusResult> consensusResults = new List<ConsensusResult>();
 
@@ -23,9 +24,17 @@ namespace Consensus.FastBFT
         {
             var from = DateTime.Now;
 
-            Network.MinNetworkLatency = 10;
-            Network.MaxNetworkLatency = 100;
-            TransactionHandler.MinTransactionsCountInBlock = 100;
+            ClientsCount = int.Parse(ConfigurationManager.AppSettings["ClientsCount"]);
+            ActiveReplicasCount = int.Parse(ConfigurationManager.AppSettings["ActiveReplicasCount"]);
+            PassiveReplicasCount = int.Parse(ConfigurationManager.AppSettings["PassiveReplicasCount"]);
+            FaultyReplicasCount = int.Parse(ConfigurationManager.AppSettings["FaultyReplicasCount"]);
+
+            Network.MinNetworkLatency = int.Parse(ConfigurationManager.AppSettings["MinNetworkLatency"]);
+            Network.MaxNetworkLatency = int.Parse(ConfigurationManager.AppSettings["MaxNetworkLatency"]);
+
+            TransactionHandler.MinTransactionsCountInBlock = int.Parse(ConfigurationManager.AppSettings["MinTransactionsCountInBlock"]);
+
+            IEnumerable<int[]> blockchain;
 
             using (var cancellationTokenSource = new CancellationTokenSource())
             {
@@ -33,6 +42,7 @@ namespace Consensus.FastBFT
 
                 var primaryReplica = RunReplicas(token);
 
+                blockchain = primaryReplica.Blockchain;
                 primaryReplica.OnConsensusReached = cr => consensusResults.Add(cr);
 
                 RunClients(primaryReplica, token);
@@ -45,14 +55,14 @@ namespace Consensus.FastBFT
 
             Thread.Sleep(2500);
 
-            PrintRunSummary(to, from);
+            PrintRunSummary(to, from, blockchain);
 
             Console.ReadKey();
         }
 
         private static void RunClients(PrimaryReplica primaryReplica, CancellationToken cancellationToken)
         {
-            var clients = Enumerable.Range(0, clientsCount)
+            var clients = Enumerable.Range(0, ClientsCount)
                 .Select(cid => new Client(cid))
                 .ToArray();
 
@@ -65,11 +75,11 @@ namespace Consensus.FastBFT
         private static PrimaryReplica RunReplicas(CancellationToken cancellationToken)
         {
             var rnd = new Random(Environment.TickCount);
-            var replicaIds = Enumerable.Range(0, replicasCount).ToArray();
+            var replicaIds = Enumerable.Range(0, ActiveReplicasCount + PassiveReplicasCount + FaultyReplicasCount).ToArray();
 
             var workingReplicaIds = replicaIds
                 //.OrderBy(r => rnd.Next(replicaIds.Length))
-                .Take(workingReplicasCount)
+                .Take(ActiveReplicasCount + PassiveReplicasCount)
                 .ToArray();
 
             var faultyReplicaIds = replicaIds
@@ -77,7 +87,7 @@ namespace Consensus.FastBFT
                 .ToArray();
 
             var activeReplicaIds = workingReplicaIds
-                .Take(activeReplicasCount)
+                .Take(ActiveReplicasCount)
                 .ToArray();
 
             var passiveReplicaIds = workingReplicaIds
@@ -101,13 +111,12 @@ namespace Consensus.FastBFT
                 secondaryReplica.Run(secondaryReplicas, cancellationToken);
             }
 
-
             primaryReplica.Run(secondaryReplicas, cancellationToken);
 
             return primaryReplica;
         }
 
-        private static void PrintRunSummary(DateTime to, DateTime from)
+        private static void PrintRunSummary(DateTime to, DateTime from, IEnumerable<int[]> blockchain)
         {
             var logBuilder = new StringBuilder();
             var orderedConsensusResults = consensusResults
@@ -116,12 +125,15 @@ namespace Consensus.FastBFT
             var minInterval = orderedConsensusResults.FirstOrDefault();
             var maxInterval = orderedConsensusResults.LastOrDefault();
             var avgInterval = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / orderedConsensusResults.Count;
+            var transactionsCount = blockchain.Sum(b => b.Length);
+            var avgTransactionRate = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / transactionsCount;
 
             logBuilder.AppendLine($"The time spent on emulation was {to - from}");
-            logBuilder.AppendLine($"Avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
-            logBuilder.AppendLine($"The replicas count was total {replicasCount}, active replicas {activeReplicasCount}, passive replicas {workingReplicasCount - activeReplicasCount}");
-            logBuilder.AppendLine($"The clients count was {clientsCount}");
-            logBuilder.AppendLine($"Avg transactions count in the block was {TransactionHandler.MinTransactionsCountInBlock}");
+            logBuilder.AppendLine($"The avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
+            logBuilder.AppendLine($"The replicas count was total {ActiveReplicasCount + PassiveReplicasCount + FaultyReplicasCount}, active replicas {ActiveReplicasCount}, passive replicas {PassiveReplicasCount}");
+            logBuilder.AppendLine($"The clients count was {ClientsCount}");
+            logBuilder.AppendLine($"The avg transactions count in the block was {TransactionHandler.MinTransactionsCountInBlock}");
+            logBuilder.AppendLine($"The handled transactions count was {transactionsCount}");
             logBuilder.AppendLine($"The consensus was reached {orderedConsensusResults.Count} times");
 
             if (minInterval != null)
@@ -131,6 +143,7 @@ namespace Consensus.FastBFT
                 logBuilder.AppendLine($"The max consensus took {(maxInterval.ReachedAt - maxInterval.StartedAt).TotalSeconds}s");
 
             logBuilder.AppendLine($"The avg consensus took {avgInterval}s");
+            logBuilder.AppendLine($"The avg transaction per second rate was {avgTransactionRate}");
 
             var log = logBuilder.ToString();
 
