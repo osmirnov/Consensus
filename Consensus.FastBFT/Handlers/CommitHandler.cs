@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -25,9 +26,7 @@ namespace Consensus.FastBFT.Handlers
             if (Crypto.GetHash(message.Secret + replica.Tee.LatestCounter + replica.Tee.ViewNumber) != secretHash)
             {
                 Log(replica, "Send RequestViewChangeMessage to all active replicas.");
-                nextSecretShare = string.Empty;
-                nextChildSecretHashes = new Dictionary<int, uint>(0);
-                return;
+                throw new InvalidOperationException("Invalid secret hash.");
             }
 
             // add the same block as a primary replica
@@ -38,9 +37,7 @@ namespace Consensus.FastBFT.Handlers
             if (message.CommitResult != commitResult)
             {
                 Log(replica, "Send RequestViewChangeMessage to all active replicas.");
-                nextSecretShare = string.Empty;
-                nextChildSecretHashes = new Dictionary<int, uint>(0);
-                return;
+                throw new InvalidOperationException("Inconsitent commit result.");
             }
 
             uint nextSecretHash;

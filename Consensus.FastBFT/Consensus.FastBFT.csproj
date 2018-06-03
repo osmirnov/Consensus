@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Client.cs" />
+    <Compile Include="ConsensusResult.cs" />
     <Compile Include="Handlers\Handler.cs" />
     <Compile Include="Handlers\CommitHandler.cs" />
     <Compile Include="Handlers\NewViewHandler.cs" />

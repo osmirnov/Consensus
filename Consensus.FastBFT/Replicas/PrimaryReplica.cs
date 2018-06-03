@@ -15,6 +15,8 @@ namespace Consensus.FastBFT.Replicas
     {
         public PrimaryTee Tee { get; }
 
+        public Action<ConsensusResult> OnConsensusReached;
+
         public PrimaryReplica(int id) : base(id)
         {
             Tee = new PrimaryTee(PrivateKey, PublicKey);
@@ -78,6 +80,7 @@ namespace Consensus.FastBFT.Replicas
             var isSecretDistributed = false;
             var signedSecretHashesAndCounterViewNumber = new List<byte[]>(0);
             var consensusBlock = default(int[]);
+            var consensusStartedAt = DateTime.Now;
 
             // process blocks
             Task.Factory.StartNew(() =>
@@ -96,14 +99,17 @@ namespace Consensus.FastBFT.Replicas
 
                     if (consensusBlock == null)
                     {
+                        // get a block of transactions to agree upon to be added to blockchain
                         if (blockExchange.TryDequeue(out consensusBlock) == false)
                         {
                             Thread.Sleep(1000);
                             continue;
                         }
 
+                        consensusStartedAt = DateTime.Now;
+
                         InitiateConsesusProcess(activeReplicas, consensusBlock);
-                        Log($"The consenus was started on block #{string.Join(string.Empty, consensusBlock)}");
+                        Log($"The consenus was started on block #{Blockchain.Count} (TransactionsCount: {consensusBlock.Length}, StartedAt: {consensusStartedAt}).");
                         continue;
                     }
 
@@ -127,7 +133,7 @@ namespace Consensus.FastBFT.Replicas
                     var message = PeekMessage();
                     if (message == null)
                     {
-                        Thread.Sleep(1000);
+                        Thread.Sleep(10);
                         continue;
                     }
 
@@ -149,17 +155,21 @@ namespace Consensus.FastBFT.Replicas
                             !isCommitted ? signedSecretHashesAndCounterViewNumber.First() : signedSecretHashesAndCounterViewNumber.Last(),
                             verifiedChildShareSecrets);
 
-                        if (isCommitted)
-                        {
-                            // hasConsensus = false;
-
-                            // Log($"The block #{string.Join(string.Empty, consensusBlock)} was comitted and replicas were notified.");
-                        }
-
                         if (hasConsensus)
                         {
-                            Log($"The consensus was reached on block #{string.Join(string.Empty, consensusBlock)}.");
+                            var consensusReachedAt = DateTime.Now;
 
+                            Log($"The consensus was reached on #{Blockchain.Count - 1} (TransactionsCount: {consensusBlock.Length}, ReachedAt: {consensusReachedAt}, LastedDue: {consensusReachedAt - consensusStartedAt}).");
+
+                            OnConsensusReached(new ConsensusResult
+                            {
+                                StartedAt = consensusStartedAt,
+                                ReachedAt = consensusReachedAt,
+                                BlockNumber = Blockchain.Count - 1,
+                                TransactionsCount = consensusBlock.Length
+                            });
+
+                            isSecretDistributed = false;
                             consensusBlock = null;
                             isCommitted = false;
                             hasConsensus = false;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -16,15 +17,15 @@ namespace Consensus.FastBFT.Handlers
             string replicaSecretShare,
             Dictionary<int, uint> childSecretHashes,
             Dictionary<int, CancellationTokenSource> secretShareMessageTokenSources,
-            ConcurrentDictionary<int, string> verifiedChildShareSecrets)
+            ConcurrentDictionary<int, string> verifiedChildrenSecretShares)
         {
             var childReplicaId = message.ReplicaId;
-            var childSecretShare = message.ReplicaSecretShares[message.ReplicaId];
+            var childReplicaSecretShare = message.ReplicaSecretShares[message.ReplicaId];
 
             secretShareMessageTokenSources[childReplicaId].Cancel();
             secretShareMessageTokenSources.Remove(childReplicaId);
 
-            if (Crypto.GetHash(childSecretShare) != childSecretHashes[childReplicaId])
+            if (Crypto.GetHash(childReplicaSecretShare) != childSecretHashes[childReplicaId])
             {
                 replica.ParentReplica.SendMessage(
                     new SuspectMessage
@@ -33,25 +34,28 @@ namespace Consensus.FastBFT.Handlers
                     });
             }
 
-            if (verifiedChildShareSecrets.TryAdd(childReplicaId, childSecretShare) == false)
+            if (verifiedChildrenSecretShares.TryAdd(childReplicaId, childReplicaSecretShare) == false)
+            {
+                throw new InvalidOperationException($"The child secret share for replica #{childReplicaId} has already been delivered.");
+            }
+
+            if (verifiedChildrenSecretShares.Count != replica.ChildReplicas.Count)
             {
                 return;
             }
 
-            if (verifiedChildShareSecrets.Count != replica.ChildReplicas.Count)
-            {
-                return;
-            }
-
-            if (verifiedChildShareSecrets.Keys.OrderBy(_ => _)
+            if (verifiedChildrenSecretShares.Keys.OrderBy(_ => _)
                     .SequenceEqual(replica.ChildReplicas.Select(r => r.Id).OrderBy(_ => _)) == false)
             {
                 return;
             }
 
-            var verifiedSecretShares = verifiedChildShareSecrets;
+            foreach (var childSecretShare in message.ReplicaSecretShares)
+            {
+                verifiedChildrenSecretShares.TryAdd(childSecretShare.Key, childSecretShare.Value);
+            }
 
-            verifiedSecretShares.TryAdd(replica.Id, replicaSecretShare);
+            verifiedChildrenSecretShares.TryAdd(replica.Id, replicaSecretShare);
 
             // we send a message with a secret share to the parent replica
             Network.EmulateLatency();
@@ -60,7 +64,7 @@ namespace Consensus.FastBFT.Handlers
                 new SecretShareMessage
                 {
                     ReplicaId = replica.Id,
-                    ReplicaSecretShares = verifiedSecretShares.ToDictionary(kv => kv.Key, kv => kv.Value)
+                    ReplicaSecretShares = verifiedChildrenSecretShares.ToDictionary(kv => kv.Key, kv => kv.Value)
                 });
 
             Log(replica, "Send a secret share to the parent replica (ParentReplicaId: {0})", replica.ParentReplica.Id);

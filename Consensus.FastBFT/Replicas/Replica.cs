@@ -24,6 +24,10 @@ namespace Consensus.FastBFT.Replicas
             // process messages
             Task.Factory.StartNew(() =>
             {
+                var signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber = new byte[0];
+                var encryptedViewKey = string.Empty;
+                var viewChangesCount = new ConcurrentDictionary<int, int>();
+
                 var replicaSecrets = new Dictionary<int, byte[]>(2);
                 var block = new int[0];
                 var replicaSecretShare = string.Empty;
@@ -31,9 +35,6 @@ namespace Consensus.FastBFT.Replicas
                 var childSecretHashes = new Dictionary<int, uint>();
                 var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
                 var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
-                var signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber = new byte[0];
-                var encryptedViewKey = string.Empty;
-                var viewChangesCount = new ConcurrentDictionary<int, int>();
 
                 Log("Running...");
 
@@ -42,7 +43,7 @@ namespace Consensus.FastBFT.Replicas
                     var message = ReceiveMessage();
                     if (message == null)
                     {
-                        Thread.Sleep(1000);
+                        Thread.Sleep(10);
                         continue;
                     }
 
@@ -83,6 +84,10 @@ namespace Consensus.FastBFT.Replicas
                     if (preprocessingMessage != null)
                     {
                         Log("Received PreprocessingMessage");
+
+                        childSecretHashes.Clear();
+                        secretShareMessageTokenSources.Clear();
+                        verifiedChildShareSecrets.Clear();
 
                         PreprocessingHandler.Handle(preprocessingMessage, replicaSecrets);
                     }
@@ -137,6 +142,8 @@ namespace Consensus.FastBFT.Replicas
                             out replicaSecretShare,
                             out childSecretHashes,
                             secretShareMessageTokenSources);
+
+                        replicaSecrets.Clear();
                     }
                 }
 

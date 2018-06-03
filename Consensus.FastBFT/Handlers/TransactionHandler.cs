@@ -8,7 +8,7 @@ namespace Consensus.FastBFT.Handlers
 {
     public class TransactionHandler : Handler
     {
-        public const int MinTransactionsCountInBlock = 10;
+        public static int MinTransactionsCountInBlock = 100;
 
         public static void Handle(
             TransactionMessage message,

@@ -5,14 +5,14 @@ namespace Consensus.FastBFT.Infrastructure
 {
     public class Network
     {
-        private const int minNetworkLatency = 10;
-        private const int maxNetworkLatency = 100;
+        private static Random rnd = new Random(Environment.TickCount);
 
-        static Random rnd = new Random(Environment.TickCount);
+        public static int MinNetworkLatency = 10;
+        public static int MaxNetworkLatency = 100;
 
         public static void EmulateLatency()
         {
-            Thread.Sleep(rnd.Next(minNetworkLatency, maxNetworkLatency));
+            Thread.Sleep(rnd.Next(MinNetworkLatency, MaxNetworkLatency));
         }
     }
 }

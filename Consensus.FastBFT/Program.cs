@@ -1,33 +1,38 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using Consensus.FastBFT.Handlers;
+using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT
 {
     internal class Program
     {
-        private class Interval
-        {
-            public readonly DateTime From = DateTime.Now;
-            public readonly DateTime To = DateTime.Now;
-        }
-
         private const int clientsCount = 1;
-        private const int replicasCount = 9;
+        private const int replicasCount = 19;
+        private const int workingReplicasCount = replicasCount * 2 / 3;
+        private const int activeReplicasCount = workingReplicasCount * 2 / 3;
 
-        private static readonly ConcurrentDictionary<string, Interval> consensusIntervals = new ConcurrentDictionary<string, Interval>();
+        private static readonly List<ConsensusResult> consensusResults = new List<ConsensusResult>();
 
         private static void Main()
         {
             var from = DateTime.Now;
+
+            Network.MinNetworkLatency = 10;
+            Network.MaxNetworkLatency = 100;
+            TransactionHandler.MinTransactionsCountInBlock = 100;
 
             using (var cancellationTokenSource = new CancellationTokenSource())
             {
                 var token = cancellationTokenSource.Token;
 
                 var primaryReplica = RunReplicas(token);
+
+                primaryReplica.OnConsensusReached = cr => consensusResults.Add(cr);
+
                 RunClients(primaryReplica, token);
 
                 Console.ReadKey();
@@ -62,7 +67,7 @@ namespace Consensus.FastBFT
 
             var workingReplicaIds = replicaIds
                 //.OrderBy(r => rnd.Next(replicaIds.Length))
-                .Take(replicaIds.Length * 2 / 3)
+                .Take(workingReplicasCount)
                 .ToArray();
 
             var faultyReplicaIds = replicaIds
@@ -70,7 +75,7 @@ namespace Consensus.FastBFT
                 .ToArray();
 
             var activeReplicaIds = workingReplicaIds
-                .Take(workingReplicaIds.Length * 2 / 3)
+                .Take(activeReplicasCount)
                 .ToArray();
 
             var passiveReplicaIds = workingReplicaIds
@@ -102,23 +107,24 @@ namespace Consensus.FastBFT
 
         private static void PrintRunSummary(DateTime to, DateTime from)
         {
-            var intervals = consensusIntervals
-                .Select(ci => ci.Value)
-                .Where(i => (i.To - i.From).TotalSeconds > 3)
-                .OrderBy(i => i.To - i.From)
+            var orderedConsensusResults = consensusResults
+                .OrderBy(cr => cr.ReachedAt - cr.StartedAt)
                 .ToList();
-            var minInterval = intervals.FirstOrDefault();
-            var maxInterval = intervals.LastOrDefault();
-            var avgInterval = intervals.Sum(i => (i.To - i.From).TotalSeconds) / intervals.Count;
+            var minInterval = orderedConsensusResults.FirstOrDefault();
+            var maxInterval = orderedConsensusResults.LastOrDefault();
+            var avgInterval = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / orderedConsensusResults.Count;
 
-            Console.WriteLine($"The time spent on emulation was {(to - from).TotalSeconds}s");
-            Console.WriteLine($"The consensus were reached {intervals.Count}");
+            Console.WriteLine($"The time spent on emulation was {to - from}");
+            Console.WriteLine($"Avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
+            Console.WriteLine($"The replicas count was total {replicasCount}, active replicas {activeReplicasCount}, passive replicas {workingReplicasCount - activeReplicasCount}");
+            Console.WriteLine($"The clients count was {clientsCount}");
+            Console.WriteLine($"The consensus were reached {orderedConsensusResults.Count} times");
 
             if (minInterval != null)
-                Console.WriteLine($"The min consensus took {(minInterval.To - minInterval.From).TotalSeconds}s");
+                Console.WriteLine($"The min consensus took {(minInterval.ReachedAt - minInterval.StartedAt).TotalSeconds}s");
 
             if (maxInterval != null)
-                Console.WriteLine($"The max consensus took {(maxInterval.To - maxInterval.From).TotalSeconds}s");
+                Console.WriteLine($"The max consensus took {(maxInterval.ReachedAt - maxInterval.StartedAt).TotalSeconds}s");
 
             Console.WriteLine($"The avg consensus took {avgInterval}s");
         }

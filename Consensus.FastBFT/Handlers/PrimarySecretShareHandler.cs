@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using Consensus.FastBFT.Infrastructure;
@@ -58,7 +59,8 @@ namespace Consensus.FastBFT.Handlers
 
             if (Crypto.GetHash(secret + counter + viewNumber) != secretHash)
             {
-                return;
+                Log(primaryReplica, "Send RequestViewChangeMessage to all active replicas.");
+                throw new InvalidOperationException("Invalid secret hash.");
             }
 
             if (!isCommitted)
