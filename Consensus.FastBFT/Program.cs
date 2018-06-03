@@ -39,7 +39,7 @@ namespace Consensus.FastBFT
 
             TransactionHandler.MinTransactionsCountInBlock = int.Parse(ConfigurationManager.AppSettings["MinTransactionsCountInBlock"]);
 
-            IEnumerable<int[]> blockchain;
+            IList<int[]> blockchain;
 
             using (var cancellationTokenSource = new CancellationTokenSource())
             {
@@ -121,8 +121,17 @@ namespace Consensus.FastBFT
             return primaryReplica;
         }
 
-        private static void PrintRunSummary(DateTime to, DateTime from, IEnumerable<int[]> blockchain)
+        private static void PrintRunSummary(DateTime to, DateTime from, IList<int[]> blockchain)
         {
+            if (consensusResults.Count > 0)
+            {
+                // we will drop the first consensus using that as warm-up process
+                consensusResults.RemoveAt(0);
+
+                // and consequently we will drop block #0
+                blockchain.RemoveAt(0);
+            }
+
             var logBuilder = new StringBuilder();
             var orderedConsensusResults = consensusResults
                 .OrderBy(cr => cr.ReachedAt - cr.StartedAt)
