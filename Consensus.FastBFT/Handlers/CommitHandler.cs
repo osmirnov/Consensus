@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -12,6 +11,11 @@ namespace Consensus.FastBFT.Handlers
 {
     public class CommitHandler : Handler
     {
+        private static Random rnd = new Random(Environment.TickCount);
+
+        public static int MinTimeToAddBlockIntoBlockchain = 10;
+        public static int MaxTimeToAddBlockIntoBlockchain = 100;
+
         public static void Handle(
             CommitMessage message,
             Replica replica,
@@ -30,6 +34,8 @@ namespace Consensus.FastBFT.Handlers
             }
 
             // add the same block as a primary replica
+            Thread.Sleep(rnd.Next(MinTimeToAddBlockIntoBlockchain, MaxTimeToAddBlockIntoBlockchain));
+
             blockchain.Add(block);
 
             var commitResult = blockchain.Count;

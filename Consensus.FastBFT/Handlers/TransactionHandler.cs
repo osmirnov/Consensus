@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using Consensus.FastBFT.Messages;
+using Consensus.FastBFT.Replicas;
 
 namespace Consensus.FastBFT.Handlers
 {
@@ -12,30 +11,25 @@ namespace Consensus.FastBFT.Handlers
 
         public static void Handle(
             TransactionMessage message,
-            IList<int> block,
+            PrimaryReplica primaryReplica,
+            ref ConcurrentBag<int> block,
             ConcurrentQueue<int[]> blockExchange)
         {
             var transaction = message.Transaction;
 
-            lock (block)
-            {
-                block.Add(transaction);
-            }
+            block.Add(transaction);
 
             var now = DateTime.Now;
             if (block.Count >= MinTransactionsCountInBlock)
             {
                 var blockCopy = block.ToArray();
 
-                lock (block)
-                {
-                    block.Clear();
-                }
+                block = new ConcurrentBag<int>();
 
                 // publish block to start working on consensus
                 blockExchange.Enqueue(blockCopy);
 
-                // Log($"New block arrived for consensus (tx count: {blockCopy.Length})");
+                Log(primaryReplica, $"New block arrived for consensus (TransactionCounts: {blockCopy.Length}).");
             }
         }
     }

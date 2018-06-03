@@ -53,7 +53,7 @@ namespace Consensus.FastBFT.Replicas
 
             Task.Factory.StartNew(() =>
             {
-                var newBlock = new List<int>();
+                var newBlock = new ConcurrentBag<int>();
 
                 Log("Running transaction listening...");
 
@@ -62,14 +62,14 @@ namespace Consensus.FastBFT.Replicas
                     var message = PeekMessage();
                     if (message == null)
                     {
-                        Thread.Sleep(1000);
+                        Thread.Sleep(10);
                         continue;
                     }
 
                     var transactionMessage = message as TransactionMessage;
                     if (transactionMessage != null)
                     {
-                        TransactionHandler.Handle(transactionMessage, newBlock, blockExchange);
+                        TransactionHandler.Handle(transactionMessage, this, ref newBlock, blockExchange);
                         ReceiveMessage();
                     }
                 }
@@ -102,7 +102,7 @@ namespace Consensus.FastBFT.Replicas
                         // get a block of transactions to agree upon to be added to blockchain
                         if (blockExchange.TryDequeue(out consensusBlock) == false)
                         {
-                            Thread.Sleep(1000);
+                            Thread.Sleep(10);
                             continue;
                         }
 
@@ -221,7 +221,7 @@ namespace Consensus.FastBFT.Replicas
             }
 
             // we will wait for 1 second to make sure all replicas in sync
-            Thread.Sleep(1000);
+            Thread.Sleep(500 * activeReplicas.Count());
         }
 
         private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas, out List<byte[]> signedSecretHashesAndCounterViewNumbers)
@@ -233,13 +233,13 @@ namespace Consensus.FastBFT.Replicas
             signedSecretHashesAndCounterViewNumbers = signedSecretHashesAndEncryptedReplicaSecrets.Select(x => x.Key).ToList();
             var allEncryptedReplicaSecrets = signedSecretHashesAndEncryptedReplicaSecrets.Select(x => x.Value).ToList();
 
+            // we distribute secret shares among active replicas
+            // we assume it is done in parallel and this network delay represents all of them
+            Network.EmulateLatency();
+
             for (var i = 0; i < allEncryptedReplicaSecrets.Count; i++)
             {
                 var encryptedReplicaSecrets = allEncryptedReplicaSecrets[i];
-
-                // we distribute secret shares among active replicas
-                // we assume it is done in parallel and this network delay represents all of them
-                Network.EmulateLatency();
 
                 foreach (var encryptedReplicaSecret in encryptedReplicaSecrets)
                 {

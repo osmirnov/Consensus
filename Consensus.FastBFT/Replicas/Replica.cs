@@ -47,36 +47,35 @@ namespace Consensus.FastBFT.Replicas
                         continue;
                     }
 
-                    var newViewMessage = message as NewViewMessage;
-                    if (newViewMessage != null)
-                    {
-                        Log("Received NewViewMessage");
-
-                        NewViewHandler.Handle(
-                            newViewMessage,
-                            this,
-                            activeReplicas,
-                            out signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
-                            out encryptedViewKey);
-                    }
-
-                    var viewChangeMessage = message as ViewChangeMessage;
-                    if (viewChangeMessage != null)
-                    {
-                        Log("Received ViewChangeMessage (SourceReplicaId: {0})", viewChangeMessage.ReplicaId);
-
-                        ViewChangeHandler.Handle(
-                            viewChangeMessage,
-                            this,
-                            activeReplicas,
-                            viewChangesCount,
-                            signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
-                            encryptedViewKey);
-                    }
-
                     if (Tee.ViewKey == 0)
                     {
-                        Thread.Sleep(1000);
+                        var newViewMessage = message as NewViewMessage;
+                        if (newViewMessage != null)
+                        {
+                            Log("Received NewViewMessage");
+
+                            NewViewHandler.Handle(
+                                newViewMessage,
+                                this,
+                                activeReplicas,
+                                out signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
+                                out encryptedViewKey);
+                        }
+
+                        var viewChangeMessage = message as ViewChangeMessage;
+                        if (viewChangeMessage != null)
+                        {
+                            Log("Received ViewChangeMessage (SourceReplicaId: {0})", viewChangeMessage.ReplicaId);
+
+                            ViewChangeHandler.Handle(
+                                viewChangeMessage,
+                                this,
+                                activeReplicas,
+                                viewChangesCount,
+                                signedByPrimaryReplicaAheadBlocksOrTreeHashAndCounterViewNumber,
+                                encryptedViewKey);
+                        }
+
                         continue;
                     }
 

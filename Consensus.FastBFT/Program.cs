@@ -32,6 +32,11 @@ namespace Consensus.FastBFT
             Network.MinNetworkLatency = int.Parse(ConfigurationManager.AppSettings["MinNetworkLatency"]);
             Network.MaxNetworkLatency = int.Parse(ConfigurationManager.AppSettings["MaxNetworkLatency"]);
 
+            PrimarySecretShareHandler.MinTimeToAddBlockIntoBlockchain = int.Parse(ConfigurationManager.AppSettings["MinTimeToAddBlockIntoBlockchain"]);
+            PrimarySecretShareHandler.MaxTimeToAddBlockIntoBlockchain = int.Parse(ConfigurationManager.AppSettings["MaxTimeToAddBlockIntoBlockchain"]);
+            CommitHandler.MinTimeToAddBlockIntoBlockchain = PrimarySecretShareHandler.MinTimeToAddBlockIntoBlockchain;
+            CommitHandler.MaxTimeToAddBlockIntoBlockchain = PrimarySecretShareHandler.MaxTimeToAddBlockIntoBlockchain;
+
             TransactionHandler.MinTransactionsCountInBlock = int.Parse(ConfigurationManager.AppSettings["MinTransactionsCountInBlock"]);
 
             IEnumerable<int[]> blockchain;
@@ -124,15 +129,17 @@ namespace Consensus.FastBFT
                 .ToList();
             var minInterval = orderedConsensusResults.FirstOrDefault();
             var maxInterval = orderedConsensusResults.LastOrDefault();
-            var avgInterval = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / orderedConsensusResults.Count;
-            var transactionsCount = blockchain.Sum(b => b.Length);
+            var avgInterval = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / Math.Max(orderedConsensusResults.Count, 1);
+            var minTransactionsCountInBlock = TransactionHandler.MinTransactionsCountInBlock;
+            var transactionsCount = blockchain.Sum(b => (int?)b.Length) ?? 1;
             var avgTransactionRate = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / transactionsCount;
 
             logBuilder.AppendLine($"The time spent on emulation was {to - from}");
             logBuilder.AppendLine($"The avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
             logBuilder.AppendLine($"The replicas count was total {ActiveReplicasCount + PassiveReplicasCount + FaultyReplicasCount}, active replicas {ActiveReplicasCount}, passive replicas {PassiveReplicasCount}");
             logBuilder.AppendLine($"The clients count was {ClientsCount}");
-            logBuilder.AppendLine($"The avg transactions count in the block was {TransactionHandler.MinTransactionsCountInBlock}");
+            logBuilder.AppendLine($"The avg transactions count in the block was {minTransactionsCountInBlock}");
+            logBuilder.AppendLine($"The avg time to add a block into the blockchain was {(CommitHandler.MaxTimeToAddBlockIntoBlockchain + CommitHandler.MinTimeToAddBlockIntoBlockchain) / 2}ms");
             logBuilder.AppendLine($"The handled transactions count was {transactionsCount}");
             logBuilder.AppendLine($"The consensus was reached {orderedConsensusResults.Count} times");
 
@@ -143,7 +150,7 @@ namespace Consensus.FastBFT
                 logBuilder.AppendLine($"The max consensus took {(maxInterval.ReachedAt - maxInterval.StartedAt).TotalSeconds}s");
 
             logBuilder.AppendLine($"The avg consensus took {avgInterval}s");
-            logBuilder.AppendLine($"The avg transaction per second rate was {avgTransactionRate}");
+            logBuilder.AppendLine($"The avg transaction per second rate was {avgTransactionRate} (~{Convert.ToInt32(1 / avgTransactionRate)} transactions/second)");
 
             var log = logBuilder.ToString();
 

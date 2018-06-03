@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 using Consensus.FastBFT.Messages;
 using Consensus.FastBFT.Replicas;
@@ -10,6 +11,11 @@ namespace Consensus.FastBFT.Handlers
 {
     public class PrimarySecretShareHandler : Handler
     {
+        private static Random rnd = new Random(Environment.TickCount);
+
+        public static int MinTimeToAddBlockIntoBlockchain = 10;
+        public static int MaxTimeToAddBlockIntoBlockchain = 100;
+
         public static void Handle(
             SecretShareMessage message,
             PrimaryReplica primaryReplica,
@@ -67,6 +73,8 @@ namespace Consensus.FastBFT.Handlers
             {
                 verifiedChildShareSecrets.Clear();
 
+                Thread.Sleep(rnd.Next(MinTimeToAddBlockIntoBlockchain, MaxTimeToAddBlockIntoBlockchain));
+
                 blockchain.Add(block);
 
                 var request = string.Join(string.Empty, block);
@@ -77,6 +85,7 @@ namespace Consensus.FastBFT.Handlers
 
                 Log(primaryReplica, "Broadcast a committed block.");
 
+                // the block was added on primary replica to blockchain -> we need to sync this across replicas
                 Network.EmulateLatency();
 
                 foreach (var activeRelica in activeRelicas)
