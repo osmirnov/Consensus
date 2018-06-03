@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using Consensus.FastBFT.Handlers;
 using Consensus.FastBFT.Infrastructure;
@@ -11,7 +13,7 @@ namespace Consensus.FastBFT
     internal class Program
     {
         private const int clientsCount = 1;
-        private const int replicasCount = 19;
+        private const int replicasCount = 50;
         private const int workingReplicasCount = replicasCount * 2 / 3;
         private const int activeReplicasCount = workingReplicasCount * 2 / 3;
 
@@ -107,6 +109,7 @@ namespace Consensus.FastBFT
 
         private static void PrintRunSummary(DateTime to, DateTime from)
         {
+            var logBuilder = new StringBuilder();
             var orderedConsensusResults = consensusResults
                 .OrderBy(cr => cr.ReachedAt - cr.StartedAt)
                 .ToList();
@@ -114,19 +117,26 @@ namespace Consensus.FastBFT
             var maxInterval = orderedConsensusResults.LastOrDefault();
             var avgInterval = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / orderedConsensusResults.Count;
 
-            Console.WriteLine($"The time spent on emulation was {to - from}");
-            Console.WriteLine($"Avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
-            Console.WriteLine($"The replicas count was total {replicasCount}, active replicas {activeReplicasCount}, passive replicas {workingReplicasCount - activeReplicasCount}");
-            Console.WriteLine($"The clients count was {clientsCount}");
-            Console.WriteLine($"The consensus were reached {orderedConsensusResults.Count} times");
+            logBuilder.AppendLine($"The time spent on emulation was {to - from}");
+            logBuilder.AppendLine($"Avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
+            logBuilder.AppendLine($"The replicas count was total {replicasCount}, active replicas {activeReplicasCount}, passive replicas {workingReplicasCount - activeReplicasCount}");
+            logBuilder.AppendLine($"The clients count was {clientsCount}");
+            logBuilder.AppendLine($"Avg transactions count in the block was {TransactionHandler.MinTransactionsCountInBlock}");
+            logBuilder.AppendLine($"The consensus was reached {orderedConsensusResults.Count} times");
 
             if (minInterval != null)
-                Console.WriteLine($"The min consensus took {(minInterval.ReachedAt - minInterval.StartedAt).TotalSeconds}s");
+                logBuilder.AppendLine($"The min consensus took {(minInterval.ReachedAt - minInterval.StartedAt).TotalSeconds}s");
 
             if (maxInterval != null)
-                Console.WriteLine($"The max consensus took {(maxInterval.ReachedAt - maxInterval.StartedAt).TotalSeconds}s");
+                logBuilder.AppendLine($"The max consensus took {(maxInterval.ReachedAt - maxInterval.StartedAt).TotalSeconds}s");
 
-            Console.WriteLine($"The avg consensus took {avgInterval}s");
+            logBuilder.AppendLine($"The avg consensus took {avgInterval}s");
+
+            var log = logBuilder.ToString();
+
+            Console.WriteLine(log);
+
+            File.WriteAllText(DateTime.Now.ToString("ddMMyyyyHHmmsszz") + ".log", log);
         }
     }
 }

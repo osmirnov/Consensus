@@ -34,25 +34,17 @@ namespace Consensus.FastBFT.Handlers
                     });
             }
 
-            if (verifiedChildrenSecretShares.TryAdd(childReplicaId, childReplicaSecretShare) == false)
-            {
-                throw new InvalidOperationException($"The child secret share for replica #{childReplicaId} has already been delivered.");
-            }
-
-            if (verifiedChildrenSecretShares.Count != replica.ChildReplicas.Count)
-            {
-                return;
-            }
-
-            if (verifiedChildrenSecretShares.Keys.OrderBy(_ => _)
-                    .SequenceEqual(replica.ChildReplicas.Select(r => r.Id).OrderBy(_ => _)) == false)
-            {
-                return;
-            }
-
             foreach (var childSecretShare in message.ReplicaSecretShares)
             {
-                verifiedChildrenSecretShares.TryAdd(childSecretShare.Key, childSecretShare.Value);
+                if (verifiedChildrenSecretShares.TryAdd(childSecretShare.Key, childSecretShare.Value) == false)
+                {
+                    throw new InvalidOperationException($"The child secret share for replica #{childSecretShare.Key} has already been delivered.");
+                }
+            }
+
+            if (replica.ChildReplicas.All(chr => verifiedChildrenSecretShares.ContainsKey(chr.Id)) == false)
+            {
+                return;
             }
 
             verifiedChildrenSecretShares.TryAdd(replica.Id, replicaSecretShare);
