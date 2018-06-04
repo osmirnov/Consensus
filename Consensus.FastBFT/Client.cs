@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Consensus.FastBFT.Messages;
@@ -33,7 +34,7 @@ namespace Consensus.FastBFT
                     // Log($"The transaction #{transaction} was generated.");
 
                     // a new transaction was generated -> send this to primary replica
-                    SendTransactionToPrimaryReplica(primaryReplica, transaction);
+                    primaryReplica.SendTransaction(transaction);
 
                     // Log($"The transaction #{transaction} was sent to the primary replica.");
 
@@ -49,6 +50,7 @@ namespace Consensus.FastBFT
             messageBus.Enqueue(message);
         }
 
+        [Conditional("DEBUG")]
         private void Log(string message)
         {
             Console.WriteLine($"Client #{id}: {message}");
@@ -57,14 +59,6 @@ namespace Consensus.FastBFT
         private int GenerateTransaction()
         {
             return rnd.Next();
-        }
-
-        private static void SendTransactionToPrimaryReplica(PrimaryReplica primaryReplica, int transaction)
-        {
-            primaryReplica.SendMessage(new TransactionMessage
-            {
-                Transaction = transaction
-            });
         }
 
         private async Task WaitUntilTimeoutOrReplyFromPrimaryReplica(CancellationToken cancellationToken)

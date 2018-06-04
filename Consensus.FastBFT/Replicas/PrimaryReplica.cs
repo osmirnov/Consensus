@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ namespace Consensus.FastBFT.Replicas
 {
     public class PrimaryReplica : ReplicaBase
     {
+        private readonly ConcurrentQueue<TransactionMessage> transactionBus = new ConcurrentQueue<TransactionMessage>();
+
         public PrimaryTee Tee { get; }
 
         public Action<ConsensusResult> OnConsensusReached;
@@ -59,19 +62,14 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    var message = PeekMessage();
-                    if (message == null)
+                    TransactionMessage transactionMessage;
+                    if (transactionBus.TryDequeue(out transactionMessage) == false)
                     {
-                        Thread.Sleep(10);
+                        Thread.Sleep(100);
                         continue;
                     }
 
-                    var transactionMessage = message as TransactionMessage;
-                    if (transactionMessage != null)
-                    {
-                        TransactionHandler.Handle(transactionMessage, this, ref newBlock, blockExchange);
-                        ReceiveMessage();
-                    }
+                    TransactionHandler.Handle(transactionMessage, this, ref newBlock, blockExchange);
                 }
 
                 Log("Stopped transaction listening.");
@@ -113,7 +111,7 @@ namespace Consensus.FastBFT.Replicas
                         continue;
                     }
 
-                    Thread.Sleep(5000);
+                    Thread.Sleep(500);
                 }
 
                 Log("Stopped block aggregation.");
@@ -192,6 +190,15 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
+        public void SendTransaction(int transaction)
+        {
+            transactionBus.Enqueue(new TransactionMessage
+            {
+                Transaction = transaction
+            });
+        }
+
+        [Conditional("DEBUG")]
         private void LogReplicaTopology(ReplicaBase replica)
         {
             Log("ParentReplicaId: {0}, ChildReplicaIds: [{1}]", replica.Id, string.Join(",", replica.ChildReplicas.Select(r => r.Id)));
@@ -275,6 +282,7 @@ namespace Consensus.FastBFT.Replicas
             }
         }
 
+        [Conditional("DEBUG")]
         private void Log(string message, params object[] args)
         {
             Console.WriteLine($"Primary Replica #{Id}: {string.Format(message, args)}");

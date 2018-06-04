@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using Consensus.FastBFT.Handlers;
@@ -150,6 +151,7 @@ namespace Consensus.FastBFT.Replicas
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         }
 
+        [Conditional("DEBUG")]
         private void Log(string message, params object[] args)
         {
             Console.WriteLine($"Replica #{Id}: {string.Format(message, args)}");

@@ -48,7 +48,11 @@ namespace Consensus.FastBFT
                 var primaryReplica = RunReplicas(token);
 
                 blockchain = primaryReplica.Blockchain;
-                primaryReplica.OnConsensusReached = cr => consensusResults.Add(cr);
+                primaryReplica.OnConsensusReached = cr =>
+                {
+                    consensusResults.Add(cr);
+                    Console.WriteLine("Consensus #" + consensusResults.Count);
+                };
 
                 RunClients(primaryReplica, token);
 
