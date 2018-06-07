@@ -1,8 +1,9 @@
-﻿namespace Consensus.FastBFT.Messages
+﻿using System.Collections.Generic;
+
+namespace Consensus.FastBFT.Messages
 {
     public class PreprocessingMessage : Message
     {
-        public int ReplicaSecretIndex { get; set; }
-        public byte[] ReplicaSecret { get; set; }
+        public List<byte[]> ReplicaSecrets { get; set; }
     }
 }

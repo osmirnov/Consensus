@@ -75,8 +75,10 @@ namespace Consensus.FastBFT.Replicas
                 Log("Stopped transaction listening.");
             }, cancellationToken, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
-            var isSecretDistributed = false;
             var signedSecretHashesAndCounterViewNumber = new List<byte[]>(0);
+            DistributeSecret(activeReplicas, out signedSecretHashesAndCounterViewNumber);
+            Log("All secret shares are distributed among replicas");
+
             var consensusBlock = default(int[]);
             var consensusStartedAt = DateTime.Now;
 
@@ -87,14 +89,6 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    if (!isSecretDistributed)
-                    {
-                        DistributeSecret(activeReplicas, out signedSecretHashesAndCounterViewNumber);
-                        isSecretDistributed = true;
-
-                        Log("All secret shares are distributed among replicas");
-                    }
-
                     if (consensusBlock == null)
                     {
                         // get a block of transactions to agree upon to be added to blockchain
@@ -150,7 +144,7 @@ namespace Consensus.FastBFT.Replicas
                             Blockchain,
                             ref isCommitted,
                             ref hasConsensus,
-                            !isCommitted ? signedSecretHashesAndCounterViewNumber.First() : signedSecretHashesAndCounterViewNumber.Last(),
+                            signedSecretHashesAndCounterViewNumber[Blockchain.Count * 2 - (!isCommitted ? 0 : 1)],
                             verifiedChildShareSecrets);
 
                         if (hasConsensus)
@@ -167,7 +161,6 @@ namespace Consensus.FastBFT.Replicas
                                 TransactionsCount = consensusBlock.Length
                             });
 
-                            isSecretDistributed = false;
                             consensusBlock = null;
                             isCommitted = false;
                             hasConsensus = false;
@@ -231,12 +224,14 @@ namespace Consensus.FastBFT.Replicas
             Thread.Sleep(500 * activeReplicas.Count());
         }
 
-        private void DistributeSecret(IEnumerable<ReplicaBase> activeReplicas, out List<byte[]> signedSecretHashesAndCounterViewNumbers)
+        private void DistributeSecret(
+            IEnumerable<ReplicaBase> activeReplicas,
+            out List<byte[]> signedSecretHashesAndCounterViewNumbers)
         {
             // preprocessing is designed to issue many secrets per request
             // we assume we have merged transactions in a block to request a single secret
             // and also we need an extra one for reply phase 
-            var signedSecretHashesAndEncryptedReplicaSecrets = Tee.Preprocessing(2);
+            var signedSecretHashesAndEncryptedReplicaSecrets = Tee.Preprocessing(100);
             signedSecretHashesAndCounterViewNumbers = signedSecretHashesAndEncryptedReplicaSecrets.Select(x => x.Key).ToList();
             var allEncryptedReplicaSecrets = signedSecretHashesAndEncryptedReplicaSecrets.Select(x => x.Value).ToList();
 
@@ -244,21 +239,20 @@ namespace Consensus.FastBFT.Replicas
             // we assume it is done in parallel and this network delay represents all of them
             Network.EmulateLatency();
 
-            for (var i = 0; i < allEncryptedReplicaSecrets.Count; i++)
+            var encryptedReplicaSecrets = allEncryptedReplicaSecrets
+                .SelectMany(ers => ers)
+                .GroupBy(ers => ers.Key)
+                .ToDictionary(gres => gres.Key, gres => gres.Select(x => x.Value).ToList());
+
+            foreach (var encryptedReplicaSecret in encryptedReplicaSecrets)
             {
-                var encryptedReplicaSecrets = allEncryptedReplicaSecrets[i];
+                var replicaId = encryptedReplicaSecret.Key;
+                var activeReplica = activeReplicas.SingleOrDefault(r => r.Id == replicaId);
 
-                foreach (var encryptedReplicaSecret in encryptedReplicaSecrets)
+                activeReplica?.SendMessage(new PreprocessingMessage
                 {
-                    var replicaId = encryptedReplicaSecret.Key;
-                    var activeReplica = activeReplicas.SingleOrDefault(r => r.Id == replicaId);
-
-                    activeReplica?.SendMessage(new PreprocessingMessage
-                    {
-                        ReplicaSecretIndex = i,
-                        ReplicaSecret = encryptedReplicaSecret.Value
-                    });
-                }
+                    ReplicaSecrets = encryptedReplicaSecret.Value
+                });
             }
         }
 
@@ -276,6 +270,7 @@ namespace Consensus.FastBFT.Replicas
             {
                 secondaryReplica.SendMessage(new PrepareMessage
                 {
+                    ReplicaSecretIndex = Blockchain.Count * 2,
                     Block = block,
                     RequestCounterViewNumber = signedRequestCounterViewNumber
                 });

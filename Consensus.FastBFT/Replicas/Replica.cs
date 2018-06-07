@@ -85,10 +85,6 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received PreprocessingMessage");
 
-                        childSecretHashes.Clear();
-                        secretShareMessageTokenSources.Clear();
-                        verifiedChildShareSecrets.Clear();
-
                         PreprocessingHandler.Handle(preprocessingMessage, replicaSecrets);
                     }
 
@@ -97,10 +93,14 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received PrepareMessage");
 
+                        childSecretHashes.Clear();
+                        secretShareMessageTokenSources.Clear();
+                        verifiedChildShareSecrets.Clear();
+
                         PrepareHandler.Handle(
                             prepareMessage,
                             this,
-                            replicaSecrets[0],
+                            replicaSecrets[prepareMessage.ReplicaSecretIndex],
                             out block,
                             out replicaSecretShare,
                             out childSecretHashes,
@@ -138,12 +138,10 @@ namespace Consensus.FastBFT.Replicas
                             secretHash,
                             block,
                             Blockchain,
-                            replicaSecrets[1],
+                            replicaSecrets[commitMessage.ReplicaSecretIndex],
                             out replicaSecretShare,
                             out childSecretHashes,
                             secretShareMessageTokenSources);
-
-                        replicaSecrets.Clear();
                     }
                 }
 
