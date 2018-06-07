@@ -64,6 +64,7 @@ namespace Consensus.FastBFT.Handlers
                 replica.ParentReplica.SendMessage(
                     new SecretShareMessage
                     {
+                        ReplicaSecretIndex = message.ReplicaSecretIndex,
                         ReplicaId = replica.Id,
                         ReplicaSecretShares = new Dictionary<int, string> { { replica.Id, secretShare } }
                     });

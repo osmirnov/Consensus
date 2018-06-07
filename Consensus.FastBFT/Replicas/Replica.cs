@@ -29,13 +29,13 @@ namespace Consensus.FastBFT.Replicas
                 var encryptedViewKey = string.Empty;
                 var viewChangesCount = new ConcurrentDictionary<int, int>();
 
-                var replicaSecrets = new Dictionary<int, byte[]>(2);
-                var block = new int[0];
-                var replicaSecretShare = string.Empty;
-                var secretHash = default(uint);
-                var childSecretHashes = new Dictionary<int, uint>();
-                var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
-                var secretShareMessageTokenSources = new Dictionary<int, CancellationTokenSource>();
+                var allReplicaSecrets = new Dictionary<int, byte[]>();
+                var allBlocks = new ConcurrentDictionary<int, int[]>();
+                var allReplicaSecretShares = new ConcurrentDictionary<int, string>();
+                var allSecretHashes = new ConcurrentDictionary<int, uint>();
+                var allChildSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
+                var allVerifiedChildShareSecrets = new ConcurrentDictionary<int, ConcurrentDictionary<int, string>>();
+                var allSecretShareMessageTokenSources = new ConcurrentDictionary<int, Dictionary<int, CancellationTokenSource>>();
 
                 Log("Running...");
 
@@ -85,7 +85,7 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received PreprocessingMessage");
 
-                        PreprocessingHandler.Handle(preprocessingMessage, replicaSecrets);
+                        PreprocessingHandler.Handle(preprocessingMessage, allReplicaSecrets);
                     }
 
                     var prepareMessage = message as PrepareMessage;
@@ -93,20 +93,43 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received PrepareMessage");
 
-                        childSecretHashes.Clear();
-                        secretShareMessageTokenSources.Clear();
-                        verifiedChildShareSecrets.Clear();
+                        int[] block;
+                        string replicaSecretShare;
+                        Dictionary<int, uint> childSecretHashes;
+                        uint secretHash;
+
+                        var replicaSecretIndex = prepareMessage.ReplicaSecretIndex;
 
                         PrepareHandler.Handle(
                             prepareMessage,
                             this,
-                            replicaSecrets[prepareMessage.ReplicaSecretIndex],
+                            allReplicaSecrets[replicaSecretIndex],
                             out block,
                             out replicaSecretShare,
                             out childSecretHashes,
                             out secretHash,
-                            secretShareMessageTokenSources
+                            allSecretShareMessageTokenSources.GetOrAdd(replicaSecretIndex, new Dictionary<int, CancellationTokenSource>())
                         );
+
+                        if (allBlocks.TryAdd(replicaSecretIndex, block) == false)
+                        {
+                            throw new InvalidOperationException();
+                        }
+
+                        if (allReplicaSecretShares.TryAdd(replicaSecretIndex, replicaSecretShare) == false)
+                        {
+                            throw new InvalidOperationException();
+                        }
+
+                        if (allChildSecretHashes.TryAdd(replicaSecretIndex, childSecretHashes) == false)
+                        {
+                            throw new InvalidOperationException();
+                        }
+
+                        if (allSecretHashes.TryAdd(replicaSecretIndex, secretHash) == false)
+                        {
+                            throw new InvalidOperationException();
+                        }
                     }
 
                     var secretShareMessage = message as SecretShareMessage;
@@ -114,13 +137,15 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received SecretShareMessage (SourceReplicaId: {0})", secretShareMessage.ReplicaId);
 
+                        var replicaSecretIndex = secretShareMessage.ReplicaSecretIndex;
+
                         SecretShareHandler.Handle(
                             secretShareMessage,
                             this,
-                            replicaSecretShare,
-                            childSecretHashes,
-                            secretShareMessageTokenSources,
-                            verifiedChildShareSecrets);
+                            allReplicaSecretShares[replicaSecretIndex],
+                            allChildSecretHashes[replicaSecretIndex],
+                            allSecretShareMessageTokenSources[replicaSecretIndex],
+                            allVerifiedChildShareSecrets.GetOrAdd(replicaSecretIndex, new ConcurrentDictionary<int, string>()));
                     }
 
                     var commitMessage = message as CommitMessage;
@@ -128,20 +153,33 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received CommitMessage");
 
-                        childSecretHashes.Clear();
-                        secretShareMessageTokenSources.Clear();
-                        verifiedChildShareSecrets.Clear();
+                        var nextReplicaSecretIndex = commitMessage.NextReplicaSecretIndex;
+                        var replicaSecretIndex = nextReplicaSecretIndex - 1;
+
+                        string nextReplicaSecretShare;
+                        Dictionary<int, uint> nextChildSecretHashes;
 
                         CommitHandler.Handle(
                             commitMessage,
                             this,
-                            secretHash,
-                            block,
+                            allSecretHashes[replicaSecretIndex],
+                            allBlocks[replicaSecretIndex],
                             Blockchain,
-                            replicaSecrets[commitMessage.ReplicaSecretIndex],
-                            out replicaSecretShare,
-                            out childSecretHashes,
-                            secretShareMessageTokenSources);
+                            allReplicaSecrets[nextReplicaSecretIndex],
+                            out nextReplicaSecretShare,
+                            out nextChildSecretHashes,
+                            allSecretShareMessageTokenSources.GetOrAdd(nextReplicaSecretIndex, new Dictionary<int, CancellationTokenSource>())
+                        );
+
+                        if (allReplicaSecretShares.TryAdd(nextReplicaSecretIndex, nextReplicaSecretShare) == false)
+                        {
+                            throw new InvalidOperationException();
+                        }
+
+                        if (allChildSecretHashes.TryAdd(nextReplicaSecretIndex, nextChildSecretHashes) == false)
+                        {
+                            throw new InvalidOperationException();
+                        }
                     }
                 }
 

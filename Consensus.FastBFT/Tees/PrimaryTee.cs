@@ -48,6 +48,8 @@ namespace Consensus.FastBFT.Tees
             return encryptedViewKeys;
         }
 
+        public List<string> Secrets = new List<string>();
+
         // primary replica
         public IList<KeyValuePair<byte[], IDictionary<int, byte[]>>> Preprocessing(int counterValuesCount)
         {
@@ -58,6 +60,9 @@ namespace Consensus.FastBFT.Tees
                 var counter = LatestCounter + i;
                 // generate secret
                 var secret = Guid.NewGuid().ToString();
+
+                Secrets.Add(secret);
+
                 var secretHash = Crypto.GetHash(secret + counter + ViewNumber);
                 var activeReplicasCount = activeReplicas.Count();
                 var secretShareLength = (secret.Length / activeReplicasCount) + 1;

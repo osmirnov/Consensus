@@ -92,7 +92,7 @@ namespace Consensus.FastBFT.Handlers
                 {
                     activeRelica.SendMessage(new CommitMessage
                     {
-                        ReplicaSecretIndex = blockchain.Count * 2 - 1,
+                        NextReplicaSecretIndex = blockchain.Count * 2 - 1,
                         Secret = secret,
                         CommitResult = commitResult,
                         CommitResultHashCounterViewNumber = signedCommitResultHashCounterViewNumber

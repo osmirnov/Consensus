@@ -114,9 +114,12 @@ namespace Consensus.FastBFT.Replicas
             // handle replicas communication
             Task.Factory.StartNew(() =>
             {
+                var committedBlock = default(int[]);
                 var isCommitted = false;
                 var hasConsensus = false;
-                var verifiedChildShareSecrets = new ConcurrentDictionary<int, string>();
+
+                var allChildSecretHashes = new ConcurrentDictionary<int, Dictionary<int, uint>>();
+                var allVerifiedChildShareSecrets = new ConcurrentDictionary<int, ConcurrentDictionary<int, string>>();
 
                 Log("Running message exchange...");
 
@@ -134,6 +137,7 @@ namespace Consensus.FastBFT.Replicas
                     {
                         Log("Received SecretShareMessage (SourceReplicaId: {0})", secretShareMessage.ReplicaId);
 
+                        var replicaSecretIndex = secretShareMessage.ReplicaSecretIndex;
                         var blockchainLength = Blockchain.Count;
 
                         PrimarySecretShareHandler.Handle(
@@ -144,27 +148,31 @@ namespace Consensus.FastBFT.Replicas
                             Blockchain,
                             ref isCommitted,
                             ref hasConsensus,
-                            signedSecretHashesAndCounterViewNumber[Blockchain.Count * 2 - (!isCommitted ? 0 : 1)],
-                            verifiedChildShareSecrets);
+                            signedSecretHashesAndCounterViewNumber[replicaSecretIndex],
+                            allVerifiedChildShareSecrets.GetOrAdd(replicaSecretIndex, new ConcurrentDictionary<int, string>()));
+
+                        if (blockchainLength + 1 == Blockchain.Count)
+                        {
+                            committedBlock = consensusBlock;
+                            consensusBlock = null;
+                        }
 
                         if (hasConsensus)
                         {
                             var consensusReachedAt = DateTime.Now;
 
-                            Log($"The consensus was reached on #{Blockchain.Count - 1} (TransactionsCount: {consensusBlock.Length}, ReachedAt: {consensusReachedAt}, LastedDue: {consensusReachedAt - consensusStartedAt}).");
+                            Log($"The consensus was reached on #{Blockchain.Count - 1} (TransactionsCount: {committedBlock.Length}, ReachedAt: {consensusReachedAt}, LastedDue: {consensusReachedAt - consensusStartedAt}).");
 
                             OnConsensusReached(new ConsensusResult
                             {
                                 StartedAt = consensusStartedAt,
                                 ReachedAt = consensusReachedAt,
                                 BlockNumber = Blockchain.Count - 1,
-                                TransactionsCount = consensusBlock.Length
+                                TransactionsCount = committedBlock.Length
                             });
 
-                            consensusBlock = null;
                             isCommitted = false;
                             hasConsensus = false;
-                            verifiedChildShareSecrets.Clear();
                         }
 
                         ReceiveMessage();

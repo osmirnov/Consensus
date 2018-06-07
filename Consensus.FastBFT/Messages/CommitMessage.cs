@@ -2,7 +2,7 @@
 {
     public class CommitMessage : Message
     {
-        public int ReplicaSecretIndex { get; set; }
+        public int NextReplicaSecretIndex { get; set; }
 
         public string Secret { get; set; }
 
