@@ -80,7 +80,7 @@ namespace Consensus.FastBFT.Replicas
             Log("All secret shares are distributed among replicas");
 
             var consensusBlock = default(int[]);
-            var consensusStartedAt = DateTime.Now;
+            var consensusesStartedAt = new Dictionary<int, DateTime>();
 
             // process blocks
             Task.Factory.StartNew(() =>
@@ -89,23 +89,26 @@ namespace Consensus.FastBFT.Replicas
 
                 while (cancellationToken.IsCancellationRequested == false)
                 {
-                    if (consensusBlock == null)
+                    if (consensusBlock != null)
                     {
-                        // get a block of transactions to agree upon to be added to blockchain
-                        if (blockExchange.TryDequeue(out consensusBlock) == false)
-                        {
-                            Thread.Sleep(10);
-                            continue;
-                        }
-
-                        consensusStartedAt = DateTime.Now;
-
-                        InitiateConsesusProcess(activeReplicas, consensusBlock);
-                        Log($"The consenus was started on block #{Blockchain.Count} (TransactionsCount: {consensusBlock.Length}, StartedAt: {consensusStartedAt}).");
+                        Thread.Sleep(1);
                         continue;
                     }
 
-                    Thread.Sleep(500);
+                    // get a block of transactions to agree upon to be added to blockchain
+                    if (blockExchange.TryDequeue(out consensusBlock) == false)
+                    {
+                        Thread.Sleep(1);
+                        continue;
+                    }
+
+                    var consensusStartedAt = DateTime.Now;
+                    consensusesStartedAt.Add(Blockchain.Count, consensusStartedAt);
+
+                    if (Blockchain.Count == 50) return;
+
+                    InitiateConsesusProcess(activeReplicas, consensusBlock);
+                    Log($"The consenus was started on block #{Blockchain.Count} (TransactionsCount: {consensusBlock.Length}, StartedAt: {consensusStartedAt}).");
                 }
 
                 Log("Stopped block aggregation.");
@@ -128,7 +131,7 @@ namespace Consensus.FastBFT.Replicas
                     var message = PeekMessage();
                     if (message == null)
                     {
-                        Thread.Sleep(10);
+                        Thread.Sleep(1);
                         continue;
                     }
 
@@ -149,16 +152,17 @@ namespace Consensus.FastBFT.Replicas
                             ref isCommitted,
                             ref hasConsensus,
                             signedSecretHashesAndCounterViewNumber[replicaSecretIndex],
-                            allVerifiedChildShareSecrets.GetOrAdd(replicaSecretIndex, new ConcurrentDictionary<int, string>()));
-
-                        if (blockchainLength + 1 == Blockchain.Count)
-                        {
-                            committedBlock = consensusBlock;
-                            consensusBlock = null;
-                        }
+                            allVerifiedChildShareSecrets.GetOrAdd(replicaSecretIndex, new ConcurrentDictionary<int, string>()),
+                            () =>
+                            {
+                                committedBlock = consensusBlock;
+                                consensusBlock = null;
+                            }
+                        );
 
                         if (hasConsensus)
                         {
+                            var consensusStartedAt = consensusesStartedAt[Blockchain.Count - 1];
                             var consensusReachedAt = DateTime.Now;
 
                             Log($"The consensus was reached on #{Blockchain.Count - 1} (TransactionsCount: {committedBlock.Length}, ReachedAt: {consensusReachedAt}, LastedDue: {consensusReachedAt - consensusStartedAt}).");

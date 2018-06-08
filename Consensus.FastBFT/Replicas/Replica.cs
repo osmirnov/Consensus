@@ -44,7 +44,7 @@ namespace Consensus.FastBFT.Replicas
                     var message = ReceiveMessage();
                     if (message == null)
                     {
-                        Thread.Sleep(10);
+                        Thread.Sleep(1);
                         continue;
                     }
 

@@ -25,7 +25,8 @@ namespace Consensus.FastBFT.Handlers
             ref bool isCommitted,
             ref bool hasConsensus,
             byte[] signedSecretHashAndCounterViewNumber,
-            ConcurrentDictionary<int, string> verifiedChildShareSecrets)
+            ConcurrentDictionary<int, string> verifiedChildShareSecrets,
+            Action onCommit)
         {
             var childReplicaId = message.ReplicaId;
             var childrenSecretShares = message.ReplicaSecretShares;
@@ -76,6 +77,8 @@ namespace Consensus.FastBFT.Handlers
                 Thread.Sleep(rnd.Next(MinTimeToAddBlockIntoBlockchain, MaxTimeToAddBlockIntoBlockchain));
 
                 blockchain.Add(block);
+
+                onCommit();
 
                 var request = string.Join(string.Empty, block);
                 var commitResult = blockchain.Count;

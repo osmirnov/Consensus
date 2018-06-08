@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using Consensus.FastBFT.Infrastructure;
 
 namespace Consensus.FastBFT.Tees
@@ -9,8 +10,13 @@ namespace Consensus.FastBFT.Tees
     {
         private readonly string privateKey;
         private readonly string publicKey;
+        private int latestCounter;
 
-        public uint LatestCounter { get; protected set; }  // all replicas -> latest counter
+        public uint LatestCounter
+        {
+            get { return (uint)latestCounter; }
+            protected set { latestCounter = (int)value; }
+        }  // all replicas -> latest counter
         public uint ViewNumber { get; protected set; }     // all replicas -> current view number
         public byte ViewKey { get; protected set; }        // active replica -> current view key agreed with the primary
         public bool IsActive { get; set; }
@@ -87,7 +93,7 @@ namespace Consensus.FastBFT.Tees
                 if (counter != replicaCounter || viewNumber != replicaViewNumber) throw new Exception("Invalid counter value");
                 if (counter != LatestCounter + 1) throw new Exception("Invalid counter value");
 
-                LatestCounter++;
+                Interlocked.Increment(ref latestCounter);
             }
         }
 

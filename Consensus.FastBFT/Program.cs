@@ -146,6 +146,7 @@ namespace Consensus.FastBFT
             var minTransactionsCountInBlock = TransactionHandler.MinTransactionsCountInBlock;
             var transactionsCount = blockchain.Sum(b => (int?)b.Length) ?? 1;
             var avgTransactionRate = orderedConsensusResults.Sum(cr => (cr.ReachedAt - cr.StartedAt).TotalSeconds) / transactionsCount;
+            //var avgTransactionRate = (consensusResults[consensusResults.Count - 1].ReachedAt  - consensusResults[0].StartedAt).TotalSeconds / transactionsCount;
 
             logBuilder.AppendLine($"The time spent on emulation was {to - from}");
             logBuilder.AppendLine($"The avg network latency was {(Network.MaxNetworkLatency + Network.MinNetworkLatency) / 2}ms");
